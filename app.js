@@ -1,28 +1,93 @@
 // ============================================
-// Media Studies A/L - Online Learning Portal
-// Complete JavaScript Application
+// Firebase Configuration & Initialization
 // ============================================
+let db = null;
+let firebaseConfig = null;
 
-// ============================================
-// Data Manager - LocalStorage Operations
-// ============================================
+// Check if Firebase is configured
+function checkFirebaseConfig() {
+    const savedConfig = localStorage.getItem('firebaseConfig');
+    if (savedConfig) {
+        try {
+            firebaseConfig = JSON.parse(savedConfig);
+            initializeFirebase();
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+    return false;
+}
 
-const DataManager = {
-    // Keys
-    KEYS: {
-        BRANDING: 'portal_branding',
-        ADMIN: 'portal_admin',
-        STUDENTS: 'portal_students',
-        NOTES: 'portal_notes',
-        TUTORIALS: 'portal_tutorials',
-        VIDEOS: 'portal_videos',
-        NOTICES: 'portal_notices',
-        SESSION: 'portal_session'
-    },
+// Initialize Firebase
+function initializeFirebase() {
+    try {
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database();
+        console.log('Firebase initialized successfully');
+        return true;
+    } catch (error) {
+        console.error('Firebase initialization error:', error);
+        return false;
+    }
+}
 
-    // Default Data
-    defaults: {
-        branding: {
+// Save Firebase Config
+function saveFirebaseConfig() {
+    const config = {
+        apiKey: document.getElementById('firebaseApiKey').value.trim(),
+        authDomain: document.getElementById('firebaseAuthDomain').value.trim(),
+        databaseURL: document.getElementById('firebaseDatabaseURL').value.trim(),
+        projectId: document.getElementById('firebaseProjectId').value.trim(),
+        storageBucket: document.getElementById('firebaseStorageBucket').value.trim(),
+        messagingSenderId: document.getElementById('firebaseMessagingSenderId').value.trim(),
+        appId: document.getElementById('firebaseAppId').value.trim()
+    };
+
+    // Validate required fields
+    if (!config.apiKey || !config.databaseURL || !config.projectId) {
+        showToast('Please fill in API Key, Database URL, and Project ID', true);
+        return;
+    }
+
+    localStorage.setItem('firebaseConfig', JSON.stringify(config));
+    firebaseConfig = config;
+    
+    if (initializeFirebase()) {
+        // Initialize default data
+        initializeDefaultData().then(() => {
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+            showToast('Firebase connected successfully!');
+        });
+    } else {
+        showToast('Failed to connect to Firebase. Please check your configuration.', true);
+    }
+}
+
+// Reset Firebase Config
+function resetFirebaseConfig() {
+    if (confirm('Are you sure you want to reconfigure Firebase? You will need to enter your configuration again.')) {
+        localStorage.removeItem('firebaseConfig');
+        location.reload();
+    }
+}
+
+// Initialize default data in Firebase
+async function initializeDefaultData() {
+    const snapshot = await db.ref('admin').once('value');
+    if (!snapshot.exists()) {
+        await db.ref('admin').set({
+            email: 'admin@admin.com',
+            password: 'admin123'
+        });
+    }
+
+    const brandingSnapshot = await db.ref('branding').once('value');
+    if (!brandingSnapshot.exists()) {
+        await db.ref('branding').set({
             siteName: 'Media Studies A/L',
             teacherName: '',
             className: '',
@@ -30,1733 +95,1668 @@ const DataManager = {
             logo: '',
             primaryColor: '#6366f1',
             secondaryColor: '#8b5cf6',
-            contactEmail: '',
-            contactPhone: '',
+            email: '',
+            phone: '',
             whatsapp: '',
             facebook: '',
             youtube: '',
-            footerText: ''
-        },
-        admin: {
-            email: 'admin@admin.com',
-            password: 'admin123'
-        }
-    },
-
-    // Initialize
-    init() {
-        if (!localStorage.getItem(this.KEYS.ADMIN)) {
-            this.set(this.KEYS.ADMIN, this.defaults.admin);
-        }
-        if (!localStorage.getItem(this.KEYS.BRANDING)) {
-            this.set(this.KEYS.BRANDING, this.defaults.branding);
-        }
-        if (!localStorage.getItem(this.KEYS.STUDENTS)) {
-            this.set(this.KEYS.STUDENTS, []);
-        }
-        if (!localStorage.getItem(this.KEYS.NOTES)) {
-            this.set(this.KEYS.NOTES, []);
-        }
-        if (!localStorage.getItem(this.KEYS.TUTORIALS)) {
-            this.set(this.KEYS.TUTORIALS, []);
-        }
-        if (!localStorage.getItem(this.KEYS.VIDEOS)) {
-            this.set(this.KEYS.VIDEOS, []);
-        }
-        if (!localStorage.getItem(this.KEYS.NOTICES)) {
-            this.set(this.KEYS.NOTICES, []);
-        }
-    },
-
-    // Get data
-    get(key) {
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : null;
-    },
-
-    // Set data
-    set(key, data) {
-        localStorage.setItem(key, JSON.stringify(data));
-    },
-
-    // Session management
-    saveSession(type, user) {
-        this.set(this.KEYS.SESSION, { type, user, timestamp: Date.now() });
-    },
-
-    getSession() {
-        return this.get(this.KEYS.SESSION);
-    },
-
-    clearSession() {
-        localStorage.removeItem(this.KEYS.SESSION);
-    },
-
-    // Generate ID
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+            footer: '© 2024 Media Studies A/L. All rights reserved.'
+        });
     }
-};
+}
 
 // ============================================
-// Application State
+// Database Operations
 // ============================================
-
-const App = {
-    currentUser: null,
-    isAdmin: false,
-    theme: localStorage.getItem('theme') || 'light',
-
-    // Initialize app
-    init() {
-        DataManager.init();
-        this.applyTheme();
-        this.bindEvents();
-        this.checkSession();
-        this.applyBranding();
-    },
-
-    // Check for existing session
-    checkSession() {
-        const session = DataManager.getSession();
-        if (session) {
-            // Check if session is less than 24 hours old
-            const hoursSinceLogin = (Date.now() - session.timestamp) / (1000 * 60 * 60);
-            if (hoursSinceLogin < 24) {
-                if (session.type === 'admin') {
-                    this.isAdmin = true;
-                    this.currentUser = session.user;
-                    this.showAdminDashboard();
-                } else if (session.type === 'student') {
-                    this.currentUser = session.user;
-                    this.showStudentDashboard();
-                }
-                return;
-            }
-        }
-        this.showLoginPage();
-    },
-
-    // Apply theme
-    applyTheme() {
-        document.documentElement.setAttribute('data-theme', this.theme);
-    },
-
-    // Toggle theme
-    toggleTheme() {
-        this.theme = this.theme === 'light' ? 'dark' : 'light';
-        localStorage.setItem('theme', this.theme);
-        this.applyTheme();
-    },
-
-    // Apply branding
-    applyBranding() {
-        const branding = DataManager.get(DataManager.KEYS.BRANDING);
-        if (!branding) return;
-
-        // Update CSS variables
-        document.documentElement.style.setProperty('--primary', branding.primaryColor);
-        document.documentElement.style.setProperty('--secondary', branding.secondaryColor);
-
-        // Update login page
-        document.getElementById('loginSiteName').textContent = branding.siteName;
-        document.getElementById('loginTagline').textContent = branding.tagline;
-
-        // Update header
-        const headerSiteName = document.getElementById('headerSiteName');
-        if (headerSiteName) headerSiteName.textContent = branding.siteName;
-
-        // Update logo
-        if (branding.logo) {
-            const loginLogo = document.getElementById('loginLogo');
-            const headerLogo = document.getElementById('headerLogo');
-            
-            if (loginLogo) {
-                loginLogo.innerHTML = `<img src="${branding.logo}" alt="Logo">`;
-            }
-            if (headerLogo) {
-                headerLogo.innerHTML = `<img src="${branding.logo}" alt="Logo">`;
-            }
-        }
-    },
-
-    // Show pages
-    showLoginPage() {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('loginPage').classList.add('active');
-    },
-
-    showStudentDashboard() {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('studentDashboard').classList.add('active');
-        this.updateStudentUI();
-        this.loadStudentDashboard();
-    },
-
-    showAdminDashboard() {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('adminDashboard').classList.add('active');
-        this.loadAdminOverview();
-    },
-
-    // Update student UI
-    updateStudentUI() {
-        if (!this.currentUser) return;
-
-        document.getElementById('userName').textContent = this.currentUser.name;
-        document.getElementById('welcomeName').textContent = this.currentUser.name.split(' ')[0];
-        document.getElementById('userAvatar').textContent = this.currentUser.name.charAt(0).toUpperCase();
-
-        const statusBadge = document.querySelector('#studentStatus .status-badge');
-        if (this.currentUser.isPaid) {
-            statusBadge.textContent = 'Paid Student';
-            statusBadge.className = 'status-badge paid';
-        } else {
-            statusBadge.textContent = 'Free Student';
-            statusBadge.className = 'status-badge free';
-        }
-    },
-
-    // Logout
-    logout() {
-        this.currentUser = null;
-        this.isAdmin = false;
-        DataManager.clearSession();
-        this.showLoginPage();
-    },
-
-    // Bind events
-    bindEvents() {
-        // Theme toggles
-        document.getElementById('themeToggle')?.addEventListener('click', () => this.toggleTheme());
-        document.getElementById('adminThemeToggle')?.addEventListener('click', () => this.toggleTheme());
-
-        // Login form
-        document.getElementById('loginForm')?.addEventListener('submit', (e) => this.handleStudentLogin(e));
-
-        // Admin login
-        document.getElementById('adminLoginBtn')?.addEventListener('click', () => {
-            document.getElementById('adminLoginModal').classList.add('active');
-        });
-        document.getElementById('closeAdminLogin')?.addEventListener('click', () => {
-            document.getElementById('adminLoginModal').classList.remove('active');
-        });
-        document.getElementById('adminLoginForm')?.addEventListener('submit', (e) => this.handleAdminLogin(e));
-
-        // Logout buttons
-        document.getElementById('studentLogoutBtn')?.addEventListener('click', () => this.logout());
-        document.getElementById('adminLogoutBtn')?.addEventListener('click', () => this.logout());
-
-        // Mobile menu
-        document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-        document.getElementById('adminMobileMenuBtn')?.addEventListener('click', () => {
-            document.getElementById('adminSidebar').classList.toggle('open');
-        });
-
-        // Student navigation
-        document.querySelectorAll('#sidebar .nav-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const page = item.dataset.page;
-                this.navigateStudent(page);
-            });
-        });
-
-        // Admin navigation
-        document.querySelectorAll('#adminSidebar .nav-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const page = item.dataset.adminPage;
-                this.navigateAdmin(page);
-            });
-        });
-
-        // Admin add buttons
-        document.getElementById('addStudentBtn')?.addEventListener('click', () => openModal('student'));
-        document.getElementById('addNoteBtn')?.addEventListener('click', () => openModal('note'));
-        document.getElementById('addTutorialBtn')?.addEventListener('click', () => openModal('tutorial'));
-        document.getElementById('addVideoBtn')?.addEventListener('click', () => openModal('video'));
-        document.getElementById('addNoticeBtn')?.addEventListener('click', () => openModal('notice'));
-
-        // Forms
-        document.getElementById('studentForm')?.addEventListener('submit', (e) => this.saveStudent(e));
-        document.getElementById('noteForm')?.addEventListener('submit', (e) => this.saveNote(e));
-        document.getElementById('tutorialForm')?.addEventListener('submit', (e) => this.saveTutorial(e));
-        document.getElementById('videoForm')?.addEventListener('submit', (e) => this.saveVideo(e));
-        document.getElementById('noticeForm')?.addEventListener('submit', (e) => this.saveNotice(e));
-        document.getElementById('brandingForm')?.addEventListener('submit', (e) => this.saveBranding(e));
-        document.getElementById('adminCredentialsForm')?.addEventListener('submit', (e) => this.saveAdminCredentials(e));
-
-        // Video type toggle
-        document.getElementById('videoType')?.addEventListener('change', (e) => {
-            const isYoutube = e.target.value === 'youtube';
-            document.getElementById('youtubeUrlGroup').style.display = isYoutube ? 'block' : 'none';
-            document.getElementById('videoFileGroup').style.display = isYoutube ? 'none' : 'block';
-        });
-
-        // Notice type toggle
-        document.getElementById('noticeType')?.addEventListener('change', (e) => {
-            const isBanner = e.target.value === 'banner';
-            document.getElementById('bannerImageGroup').style.display = isBanner ? 'block' : 'none';
-        });
-
-        // File inputs
-        this.bindFileInputs();
-
-        // Filters
-        this.bindFilters();
-
-        // Export/Import
-        document.getElementById('exportDataBtn')?.addEventListener('click', () => this.exportData());
-        document.getElementById('importDataFile')?.addEventListener('change', (e) => this.importData(e));
-        document.getElementById('resetAllDataBtn')?.addEventListener('click', () => this.resetAllData());
-
-        // Close modals
-        document.getElementById('closeVideoPlayer')?.addEventListener('click', () => {
-            document.getElementById('videoPlayerModal').classList.remove('active');
-            document.getElementById('videoContainer').innerHTML = '';
-        });
-
-        document.getElementById('closePdfViewer')?.addEventListener('click', () => {
-            document.getElementById('pdfViewerModal').classList.remove('active');
-            document.getElementById('pdfFrame').src = '';
-        });
-
-        // Logo handling
-        document.getElementById('logoFile')?.addEventListener('change', (e) => this.handleLogoUpload(e));
-        document.getElementById('removeLogo')?.addEventListener('click', () => this.removeLogo());
-
-        // Color inputs sync
-        document.getElementById('primaryColor')?.addEventListener('input', (e) => {
-            document.getElementById('primaryColorText').value = e.target.value;
-        });
-        document.getElementById('primaryColorText')?.addEventListener('input', (e) => {
-            document.getElementById('primaryColor').value = e.target.value;
-        });
-        document.getElementById('secondaryColor')?.addEventListener('input', (e) => {
-            document.getElementById('secondaryColorText').value = e.target.value;
-        });
-        document.getElementById('secondaryColorText')?.addEventListener('input', (e) => {
-            document.getElementById('secondaryColor').value = e.target.value;
-        });
-
-        // Color presets
-        document.querySelectorAll('.color-preset').forEach(preset => {
-            preset.addEventListener('click', () => {
-                const primary = preset.dataset.primary;
-                const secondary = preset.dataset.secondary;
-                document.getElementById('primaryColor').value = primary;
-                document.getElementById('primaryColorText').value = primary;
-                document.getElementById('secondaryColor').value = secondary;
-                document.getElementById('secondaryColorText').value = secondary;
-            });
-        });
-    },
-
-    // Bind file inputs
-    bindFileInputs() {
-        const fileInputs = [
-            { input: 'noteFile', display: 'noteFileName' },
-            { input: 'tutorialFile', display: 'tutorialFileName' },
-            { input: 'videoFile', display: 'videoFileName' },
-            { input: 'videoThumbnail', display: 'videoThumbnailName' },
-            { input: 'bannerImage', display: 'bannerImageName' }
-        ];
-
-        fileInputs.forEach(({ input, display }) => {
-            document.getElementById(input)?.addEventListener('change', (e) => {
-                const fileName = e.target.files[0]?.name || 'No file selected';
-                document.getElementById(display).textContent = fileName;
-            });
-        });
-    },
-
-    // Bind filters
-    bindFilters() {
-        // Notes filters
-        document.getElementById('notesAccessFilter')?.addEventListener('change', () => this.loadNotes());
-        document.getElementById('notesMonthFilter')?.addEventListener('change', () => this.loadNotes());
-
-        // Tutorials filters
-        document.getElementById('tutorialsTypeFilter')?.addEventListener('change', () => this.loadTutorials());
-        document.getElementById('tutorialsAccessFilter')?.addEventListener('change', () => this.loadTutorials());
-        document.getElementById('tutorialsMonthFilter')?.addEventListener('change', () => this.loadTutorials());
-
-        // Videos filters
-        document.getElementById('videosAccessFilter')?.addEventListener('change', () => this.loadVideos());
-        document.getElementById('videosMonthFilter')?.addEventListener('change', () => this.loadVideos());
-    },
-
-    // Handle student login
-    handleStudentLogin(e) {
-        e.preventDefault();
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
-
-        const students = DataManager.get(DataManager.KEYS.STUDENTS) || [];
-        const student = students.find(s => s.email === email && s.password === password);
-
-        if (student) {
-            // Check expiry for paid students
-            if (student.isPaid && student.expiryDate) {
-                const expiry = new Date(student.expiryDate);
-                if (expiry < new Date()) {
-                    student.isPaid = false;
-                    DataManager.set(DataManager.KEYS.STUDENTS, students);
-                    showToast('Your paid subscription has expired', 'warning');
-                }
-            }
-
-            this.currentUser = student;
-            DataManager.saveSession('student', student);
-            this.showStudentDashboard();
-            showToast('Welcome back, ' + student.name + '!', 'success');
-        } else {
-            showToast('Invalid email or password', 'error');
-        }
-    },
-
-    // Handle admin login
-    handleAdminLogin(e) {
-        e.preventDefault();
-        const email = document.getElementById('adminEmail').value;
-        const password = document.getElementById('adminPassword').value;
-
-        const admin = DataManager.get(DataManager.KEYS.ADMIN);
-
-        if (admin && admin.email === email && admin.password === password) {
-            this.isAdmin = true;
-            this.currentUser = { email: admin.email, name: 'Admin' };
-            DataManager.saveSession('admin', this.currentUser);
-            document.getElementById('adminLoginModal').classList.remove('active');
-            this.showAdminDashboard();
-            showToast('Welcome, Admin!', 'success');
-        } else {
-            showToast('Invalid admin credentials', 'error');
-        }
-    },
-
-    // Navigate student pages
-    navigateStudent(page) {
-        document.querySelectorAll('#sidebar .nav-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.page === page);
-        });
-        document.querySelectorAll('.content-section').forEach(section => {
-            section.classList.remove('active');
-        });
-        document.getElementById(page + 'Section').classList.add('active');
-        document.getElementById('sidebar').classList.remove('open');
-
-        // Load content
-        switch(page) {
-            case 'dashboard': this.loadStudentDashboard(); break;
-            case 'notes': this.loadNotes(); break;
-            case 'tutorials': this.loadTutorials(); break;
-            case 'videos': this.loadVideos(); break;
-        }
-    },
-
-    // Navigate admin pages
-    navigateAdmin(page) {
-        document.querySelectorAll('#adminSidebar .nav-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.adminPage === page);
-        });
-        document.querySelectorAll('.admin-section').forEach(section => {
-            section.classList.remove('active');
-        });
-
-        const sectionMap = {
-            'overview': 'overviewSection',
-            'branding': 'brandingSection',
-            'notices': 'noticesSection',
-            'students': 'studentsSection',
-            'admin-notes': 'adminNotesSection',
-            'admin-tutorials': 'adminTutorialsSection',
-            'admin-videos': 'adminVideosSection',
-            'settings': 'settingsSection'
-        };
-
-        document.getElementById(sectionMap[page]).classList.add('active');
-        document.getElementById('adminSidebar').classList.remove('open');
-
-        // Load content
-        switch(page) {
-            case 'overview': this.loadAdminOverview(); break;
-            case 'branding': this.loadBrandingForm(); break;
-            case 'notices': this.loadAdminNotices(); break;
-            case 'students': this.loadAdminStudents(); break;
-            case 'admin-notes': this.loadAdminNotes(); break;
-            case 'admin-tutorials': this.loadAdminTutorials(); break;
-            case 'admin-videos': this.loadAdminVideos(); break;
-        }
-    },
-
-    // ============================================
-    // Student Dashboard Functions
-    // ============================================
-
-    loadStudentDashboard() {
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-        const notices = DataManager.get(DataManager.KEYS.NOTICES) || [];
-        const isPaid = this.currentUser?.isPaid;
-
-        // Filter content based on paid status
-        const accessibleNotes = notes.filter(n => !n.paidOnly || isPaid);
-        const accessibleTutorials = tutorials.filter(t => !t.paidOnly || isPaid);
-        const accessibleVideos = videos.filter(v => !v.paidOnly || isPaid);
-
-        // Update stats
-        document.getElementById('statNotes').textContent = accessibleNotes.length;
-        document.getElementById('statTutorials').textContent = accessibleTutorials.length;
-        document.getElementById('statVideos').textContent = accessibleVideos.length;
-
-        // Load notices and banners
-        this.loadNoticesBanners(notices);
-
-        // Load recent items
-        this.loadRecentNotes(notes.slice(-3).reverse());
-        this.loadRecentVideos(videos.slice(-3).reverse());
-
-        // Populate month filters
-        this.populateMonthFilters();
-    },
-
-    loadNoticesBanners(notices) {
-        const container = document.getElementById('noticesBanners');
-        const activeNotices = notices.filter(n => n.active);
-
-        if (activeNotices.length === 0) {
-            container.innerHTML = '';
-            return;
-        }
-
-        container.innerHTML = activeNotices.map(notice => {
-            if (notice.type === 'banner' && notice.image) {
-                return `<div class="banner-item"><img src="${notice.image}" alt="${notice.title}"></div>`;
-            } else {
-                return `
-                    <div class="notice-item ${notice.priority}">
-                        <svg class="notice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            ${notice.priority === 'urgent' ? '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>' : '<path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"></path>'}
-                        </svg>
-                        <div class="notice-content">
-                            <h4>${notice.title}</h4>
-                            ${notice.content ? `<p>${notice.content}</p>` : ''}
-                        </div>
-                    </div>
-                `;
-            }
-        }).join('');
-    },
-
-    loadRecentNotes(notes) {
-        const container = document.getElementById('recentNotes');
-        if (notes.length === 0) {
-            container.innerHTML = '<p class="empty-state">No notes available yet</p>';
-            return;
-        }
-
-        container.innerHTML = notes.map(note => `
-            <div class="recent-item">
-                <div class="recent-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                </div>
-                <div class="recent-item-info">
-                    <div class="recent-item-title">${note.title}</div>
-                    <div class="recent-item-meta">${note.paidOnly ? 'Paid' : 'Free'} • ${formatMonth(note.month)}</div>
-                </div>
-            </div>
-        `).join('');
-    },
-
-    loadRecentVideos(videos) {
-        const container = document.getElementById('recentVideos');
-        if (videos.length === 0) {
-            container.innerHTML = '<p class="empty-state">No videos available yet</p>';
-            return;
-        }
-
-        container.innerHTML = videos.map(video => `
-            <div class="recent-item">
-                <div class="recent-item-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                    </svg>
-                </div>
-                <div class="recent-item-info">
-                    <div class="recent-item-title">${video.title}</div>
-                    <div class="recent-item-meta">${video.duration || 'N/A'} • ${formatMonth(video.month)}</div>
-                </div>
-            </div>
-        `).join('');
-    },
-
-    populateMonthFilters() {
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-
-        const allMonths = new Set();
-        [...notes, ...tutorials, ...videos].forEach(item => {
-            if (item.month) allMonths.add(item.month);
-        });
-
-        const sortedMonths = Array.from(allMonths).sort().reverse();
-        const monthOptions = '<option value="all">All Months</option>' + 
-            sortedMonths.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
-
-        document.getElementById('notesMonthFilter').innerHTML = monthOptions;
-        document.getElementById('tutorialsMonthFilter').innerHTML = monthOptions;
-        document.getElementById('videosMonthFilter').innerHTML = monthOptions;
-    },
-
-    // Load Notes
-    loadNotes() {
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-        const container = document.getElementById('notesList');
-        const accessFilter = document.getElementById('notesAccessFilter').value;
-        const monthFilter = document.getElementById('notesMonthFilter').value;
-        const isPaid = this.currentUser?.isPaid;
-
-        let filtered = notes;
-
-        // Apply access filter
-        if (accessFilter === 'free') {
-            filtered = filtered.filter(n => !n.paidOnly);
-        } else if (accessFilter === 'paid') {
-            filtered = filtered.filter(n => n.paidOnly);
-        }
-
-        // Apply month filter
-        if (monthFilter !== 'all') {
-            filtered = filtered.filter(n => n.month === monthFilter);
-        }
-
-        if (filtered.length === 0) {
-            container.innerHTML = '<p class="empty-state">No notes found</p>';
-            return;
-        }
-
-        container.innerHTML = filtered.map(note => {
-            const isLocked = note.paidOnly && !isPaid;
-            return `
-                <div class="content-card ${isLocked ? 'locked' : ''}">
-                    <div class="card-thumbnail">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                        </svg>
-                        ${isLocked ? `
-                            <div class="locked-overlay">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                </svg>
-                                <span>Paid Students Only</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div class="card-body">
-                        <span class="card-badge ${note.paidOnly ? 'paid' : 'free'}">${note.paidOnly ? 'Paid' : 'Free'}</span>
-                        <h3 class="card-title">${note.title}</h3>
-                        <p class="card-description">${note.description || 'No description'}</p>
-                        <div class="card-meta">
-                            <span>📅 ${formatMonth(note.month)}</span>
-                        </div>
-                        ${!isLocked ? `
-                            <div class="card-actions">
-                                <button class="btn btn-secondary btn-sm" onclick="App.viewPdf('${note.id}', 'note')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                    View
-                                </button>
-                                ${note.downloadable ? `
-                                    <button class="btn btn-primary btn-sm" onclick="App.downloadFile('${note.id}', 'note')">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                            <polyline points="7 10 12 15 17 10"></polyline>
-                                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                                        </svg>
-                                        Download
-                                    </button>
-                                ` : ''}
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-    },
-
-    // Load Tutorials
-    loadTutorials() {
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-        const container = document.getElementById('tutorialsList');
-        const typeFilter = document.getElementById('tutorialsTypeFilter').value;
-        const accessFilter = document.getElementById('tutorialsAccessFilter').value;
-        const monthFilter = document.getElementById('tutorialsMonthFilter').value;
-        const isPaid = this.currentUser?.isPaid;
-
-        let filtered = tutorials;
-
-        // Apply type filter
-        if (typeFilter !== 'all') {
-            filtered = filtered.filter(t => t.type === typeFilter);
-        }
-
-        // Apply access filter
-        if (accessFilter === 'free') {
-            filtered = filtered.filter(t => !t.paidOnly);
-        } else if (accessFilter === 'paid') {
-            filtered = filtered.filter(t => t.paidOnly);
-        }
-
-        // Apply month filter
-        if (monthFilter !== 'all') {
-            filtered = filtered.filter(t => t.month === monthFilter);
-        }
-
-        if (filtered.length === 0) {
-            container.innerHTML = '<p class="empty-state">No tutorials found</p>';
-            return;
-        }
-
-        container.innerHTML = filtered.map(tutorial => {
-            const isLocked = tutorial.paidOnly && !isPaid;
-            return `
-                <div class="content-card ${isLocked ? 'locked' : ''}">
-                    <div class="card-thumbnail">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                        </svg>
-                        ${isLocked ? `
-                            <div class="locked-overlay">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                </svg>
-                                <span>Paid Students Only</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div class="card-body">
-                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                            <span class="card-badge ${tutorial.type}">${tutorial.type === 'new' ? 'New' : 'Old Paper'}</span>
-                            <span class="card-badge ${tutorial.paidOnly ? 'paid' : 'free'}">${tutorial.paidOnly ? 'Paid' : 'Free'}</span>
-                        </div>
-                        <h3 class="card-title">${tutorial.title}</h3>
-                        <p class="card-description">${tutorial.description || 'No description'}</p>
-                        <div class="card-meta">
-                            <span>📅 ${formatMonth(tutorial.month)}</span>
-                        </div>
-                        ${!isLocked ? `
-                            <div class="card-actions">
-                                <button class="btn btn-secondary btn-sm" onclick="App.viewPdf('${tutorial.id}', 'tutorial')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                    View
-                                </button>
-                                ${tutorial.downloadable ? `
-                                    <button class="btn btn-primary btn-sm" onclick="App.downloadFile('${tutorial.id}', 'tutorial')">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                            <polyline points="7 10 12 15 17 10"></polyline>
-                                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                                        </svg>
-                                        Download
-                                    </button>
-                                ` : ''}
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-    },
-
-    // Load Videos
-    loadVideos() {
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-        const container = document.getElementById('videosList');
-        const accessFilter = document.getElementById('videosAccessFilter').value;
-        const monthFilter = document.getElementById('videosMonthFilter').value;
-        const isPaid = this.currentUser?.isPaid;
-
-        let filtered = videos;
-
-        // Apply access filter
-        if (accessFilter === 'free') {
-            filtered = filtered.filter(v => !v.paidOnly);
-        } else if (accessFilter === 'paid') {
-            filtered = filtered.filter(v => v.paidOnly);
-        }
-
-        // Apply month filter
-        if (monthFilter !== 'all') {
-            filtered = filtered.filter(v => v.month === monthFilter);
-        }
-
-        if (filtered.length === 0) {
-            container.innerHTML = '<p class="empty-state">No videos found</p>';
-            return;
-        }
-
-        container.innerHTML = filtered.map(video => {
-            const isLocked = video.paidOnly && !isPaid;
-            const thumbnail = video.thumbnail || this.getYoutubeThumbnail(video.youtubeUrl);
-            
-            return `
-                <div class="content-card ${isLocked ? 'locked' : ''}">
-                    <div class="card-thumbnail">
-                        ${thumbnail ? `<img src="${thumbnail}" alt="${video.title}">` : `
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                            </svg>
-                        `}
-                        ${!isLocked ? `
-                            <div class="card-play-btn" onclick="App.playVideo('${video.id}')">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                                </svg>
-                            </div>
-                        ` : `
-                            <div class="locked-overlay">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                </svg>
-                                <span>Paid Students Only</span>
-                            </div>
-                        `}
-                        ${video.duration ? `<span class="card-duration">${video.duration}</span>` : ''}
-                    </div>
-                    <div class="card-body">
-                        <span class="card-badge ${video.paidOnly ? 'paid' : 'free'}">${video.paidOnly ? 'Paid' : 'Free'}</span>
-                        <h3 class="card-title">${video.title}</h3>
-                        <p class="card-description">${video.description || 'No description'}</p>
-                        <div class="card-meta">
-                            <span>📅 ${formatMonth(video.month)}</span>
-                            ${video.duration ? `<span>⏱️ ${video.duration}</span>` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    },
-
-    // Get YouTube thumbnail
-    getYoutubeThumbnail(url) {
-        if (!url) return null;
-        const videoId = this.extractYoutubeId(url);
-        return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
-    },
-
-    // Extract YouTube video ID
-    extractYoutubeId(url) {
-        if (!url) return null;
-        const patterns = [
-            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-            /youtube\.com\/watch\?.*v=([^&\n?#]+)/
-        ];
-        for (const pattern of patterns) {
-            const match = url.match(pattern);
-            if (match) return match[1];
-        }
+async function getData(path) {
+    try {
+        const snapshot = await db.ref(path).once('value');
+        return snapshot.val();
+    } catch (error) {
+        console.error('Error getting data:', error);
         return null;
-    },
+    }
+}
 
-    // Play video
-    playVideo(id) {
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-        const video = videos.find(v => v.id === id);
-        if (!video) return;
+async function setData(path, data) {
+    try {
+        await db.ref(path).set(data);
+        return true;
+    } catch (error) {
+        console.error('Error setting data:', error);
+        return false;
+    }
+}
 
-        const modal = document.getElementById('videoPlayerModal');
-        const container = document.getElementById('videoContainer');
-        const title = document.getElementById('videoPlayerTitle');
-        const watermark = document.getElementById('videoWatermark');
+async function pushData(path, data) {
+    try {
+        const ref = await db.ref(path).push(data);
+        return ref.key;
+    } catch (error) {
+        console.error('Error pushing data:', error);
+        return null;
+    }
+}
 
-        title.textContent = video.title;
-        
-        const branding = DataManager.get(DataManager.KEYS.BRANDING);
-        watermark.textContent = branding?.siteName || 'Protected Content';
+async function updateData(path, data) {
+    try {
+        await db.ref(path).update(data);
+        return true;
+    } catch (error) {
+        console.error('Error updating data:', error);
+        return false;
+    }
+}
 
-        if (video.type === 'youtube' && video.youtubeUrl) {
-            const videoId = this.extractYoutubeId(video.youtubeUrl);
-            if (videoId) {
-                container.innerHTML = `
-                    <iframe 
-                        src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1" 
-                        frameborder="0" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                        allowfullscreen>
-                    </iframe>
-                `;
+async function deleteData(path) {
+    try {
+        await db.ref(path).remove();
+        return true;
+    } catch (error) {
+        console.error('Error deleting data:', error);
+        return false;
+    }
+}
+
+// ============================================
+// Session Management
+// ============================================
+function saveSession(user, type) {
+    const session = {
+        user: user,
+        type: type,
+        timestamp: Date.now()
+    };
+    localStorage.setItem('session', JSON.stringify(session));
+}
+
+function getSession() {
+    const session = localStorage.getItem('session');
+    if (session) {
+        const parsed = JSON.parse(session);
+        // Session expires after 24 hours
+        if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+            return parsed;
+        }
+        localStorage.removeItem('session');
+    }
+    return null;
+}
+
+function clearSession() {
+    localStorage.removeItem('session');
+}
+
+// ============================================
+// Theme Management
+// ============================================
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcons();
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const newTheme = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    updateThemeIcons();
+}
+
+function updateThemeIcons() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.querySelectorAll('.theme-toggle i').forEach(icon => {
+        icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    });
+}
+
+// ============================================
+// App Initialization
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    initTheme();
+    
+    if (!checkFirebaseConfig()) {
+        // Show setup screen
+        document.getElementById('loadingScreen').classList.add('hidden');
+        document.getElementById('setupScreen').classList.remove('hidden');
+    } else {
+        // Check for existing session
+        const session = getSession();
+        if (session) {
+            if (session.type === 'admin') {
+                showAdminDashboard();
             } else {
-                showToast('Invalid YouTube URL', 'error');
-                return;
+                currentStudent = session.user;
+                showStudentDashboard();
             }
-        } else if (video.file) {
-            const downloadAttr = video.downloadable ? '' : 'controlsList="nodownload"';
-            container.innerHTML = `
-                <video ${downloadAttr} controls autoplay oncontextmenu="return false;">
-                    <source src="${video.file}" type="video/mp4">
-                    Your browser does not support the video tag.
-                </video>
-            `;
-        }
-
-        modal.classList.add('active');
-
-        // Disable right-click
-        container.oncontextmenu = () => false;
-    },
-
-    // View PDF
-    viewPdf(id, type) {
-        const key = type === 'note' ? DataManager.KEYS.NOTES : DataManager.KEYS.TUTORIALS;
-        const items = DataManager.get(key) || [];
-        const item = items.find(i => i.id === id);
-        if (!item || !item.file) {
-            showToast('File not found', 'error');
-            return;
-        }
-
-        const modal = document.getElementById('pdfViewerModal');
-        const frame = document.getElementById('pdfFrame');
-        const title = document.getElementById('pdfViewerTitle');
-        const downloadBtn = document.getElementById('pdfDownloadBtn');
-
-        title.textContent = item.title;
-        frame.src = item.file;
-
-        if (item.downloadable) {
-            downloadBtn.style.display = 'inline-flex';
-            downloadBtn.onclick = () => this.downloadFile(id, type);
         } else {
-            downloadBtn.style.display = 'none';
+            showLoginPage();
+        }
+    }
+
+    // Setup event listeners
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    // Login tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+
+    // Login form
+    document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
+    // Navigation items - Student
+    document.querySelectorAll('#studentDashboard .nav-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const page = this.dataset.page;
+            showPage(page);
+            document.querySelectorAll('#studentDashboard .nav-item').forEach(i => i.classList.remove('active'));
+            this.classList.add('active');
+            if (window.innerWidth <= 1024) {
+                document.querySelector('#studentDashboard .sidebar').classList.remove('open');
+            }
+        });
+    });
+
+    // Navigation items - Admin
+    document.querySelectorAll('#adminDashboard .nav-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const page = this.dataset.page;
+            showAdminPage(page);
+            document.querySelectorAll('#adminDashboard .nav-item').forEach(i => i.classList.remove('active'));
+            this.classList.add('active');
+            if (window.innerWidth <= 1024) {
+                document.querySelector('#adminDashboard .sidebar').classList.remove('open');
+            }
+        });
+    });
+
+    // Form submissions
+    document.getElementById('studentForm').addEventListener('submit', handleStudentSubmit);
+    document.getElementById('noteForm').addEventListener('submit', handleNoteSubmit);
+    document.getElementById('tuteForm').addEventListener('submit', handleTuteSubmit);
+    document.getElementById('videoForm').addEventListener('submit', handleVideoSubmit);
+    document.getElementById('noticeForm').addEventListener('submit', handleNoticeSubmit);
+}
+
+// ============================================
+// Page Navigation
+// ============================================
+function showLoginPage() {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('setupScreen').classList.add('hidden');
+    document.getElementById('loginPage').classList.remove('hidden');
+    document.getElementById('studentDashboard').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.add('hidden');
+    loadBrandingForLogin();
+}
+
+async function showStudentDashboard() {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.add('hidden');
+    document.getElementById('studentDashboard').classList.remove('hidden');
+    
+    await loadBranding();
+    await loadStudentDashboard();
+}
+
+async function showAdminDashboard() {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('studentDashboard').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.remove('hidden');
+    
+    await loadAdminOverview();
+}
+
+function showPage(pageName) {
+    document.getElementById('pageTitle').textContent = 
+        pageName.charAt(0).toUpperCase() + pageName.slice(1);
+    
+    document.querySelectorAll('#studentDashboard .page').forEach(p => p.classList.add('hidden'));
+    document.getElementById(pageName + 'Page').classList.remove('hidden');
+
+    // Load content based on page
+    if (pageName === 'dashboard') loadStudentDashboard();
+    if (pageName === 'notes') loadNotes();
+    if (pageName === 'tutorials') loadTutes();
+    if (pageName === 'videos') loadVideos();
+}
+
+function showAdminPage(pageName) {
+    const title = pageName.replace('admin-', '').charAt(0).toUpperCase() + 
+                  pageName.replace('admin-', '').slice(1);
+    document.getElementById('adminPageTitle').textContent = title;
+    
+    document.querySelectorAll('#adminDashboard .page').forEach(p => p.classList.add('hidden'));
+    document.getElementById(pageName + 'Page').classList.remove('hidden');
+
+    // Load content based on page
+    if (pageName === 'admin-overview') loadAdminOverview();
+    if (pageName === 'admin-branding') loadBrandingForm();
+    if (pageName === 'admin-notices') loadAdminNotices();
+    if (pageName === 'admin-students') loadAdminStudents();
+    if (pageName === 'admin-notes') loadAdminNotes();
+    if (pageName === 'admin-tutes') loadAdminTutes();
+    if (pageName === 'admin-videos') loadAdminVideos();
+    if (pageName === 'admin-settings') loadAdminSettings();
+}
+
+function toggleSidebar() {
+    const dashboard = document.querySelector('.dashboard:not(.hidden)');
+    const sidebar = dashboard.querySelector('.sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// ============================================
+// Authentication
+// ============================================
+let currentStudent = null;
+
+async function handleLogin(e) {
+    e.preventDefault();
+    
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const isAdmin = document.querySelector('.tab-btn.active').dataset.tab === 'admin';
+    const errorDiv = document.getElementById('loginError');
+
+    errorDiv.classList.add('hidden');
+
+    if (isAdmin) {
+        const admin = await getData('admin');
+        if (admin && admin.email === email && admin.password === password) {
+            saveSession({ email }, 'admin');
+            showAdminDashboard();
+        } else {
+            errorDiv.textContent = 'Invalid admin credentials';
+            errorDiv.classList.remove('hidden');
+        }
+    } else {
+        const students = await getData('students');
+        if (students) {
+            const studentEntry = Object.entries(students).find(([id, s]) => 
+                s.email === email && s.password === password
+            );
+            if (studentEntry) {
+                currentStudent = { id: studentEntry[0], ...studentEntry[1] };
+                saveSession(currentStudent, 'student');
+                showStudentDashboard();
+            } else {
+                errorDiv.textContent = 'Invalid email or password';
+                errorDiv.classList.remove('hidden');
+            }
+        } else {
+            errorDiv.textContent = 'No students registered. Please contact admin.';
+            errorDiv.classList.remove('hidden');
+        }
+    }
+}
+
+function logout() {
+    clearSession();
+    currentStudent = null;
+    showLoginPage();
+}
+
+// ============================================
+// Branding
+// ============================================
+async function loadBrandingForLogin() {
+    const branding = await getData('branding');
+    if (branding) {
+        document.getElementById('loginSiteName').textContent = branding.siteName || 'Media Studies A/L';
+        document.getElementById('loginTagline').textContent = branding.tagline || 'Online Learning Portal';
+        document.getElementById('loginFooterText').textContent = branding.footer || '© 2024 Media Studies A/L';
+        
+        if (branding.logo) {
+            document.getElementById('loginLogo').innerHTML = `<img src="${branding.logo}" alt="Logo">`;
         }
 
-        modal.classList.add('active');
-    },
+        // Apply colors
+        if (branding.primaryColor) {
+            document.documentElement.style.setProperty('--primary-color', branding.primaryColor);
+        }
+        if (branding.secondaryColor) {
+            document.documentElement.style.setProperty('--secondary-color', branding.secondaryColor);
+        }
+    }
+}
 
-    // Download file
-    downloadFile(id, type) {
-        const key = type === 'note' ? DataManager.KEYS.NOTES : DataManager.KEYS.TUTORIALS;
-        const items = DataManager.get(key) || [];
-        const item = items.find(i => i.id === id);
-        if (!item || !item.file) {
-            showToast('File not found', 'error');
-            return;
+async function loadBranding() {
+    const branding = await getData('branding');
+    if (branding) {
+        document.getElementById('studentSiteName').textContent = branding.siteName || 'Media Studies A/L';
+        
+        if (branding.logo) {
+            document.getElementById('studentLogo').innerHTML = `<img src="${branding.logo}" alt="Logo">`;
         }
 
-        if (!item.downloadable) {
-            showToast('Download not allowed for this file', 'error');
-            return;
+        // Apply colors
+        if (branding.primaryColor) {
+            document.documentElement.style.setProperty('--primary-color', branding.primaryColor);
         }
+        if (branding.secondaryColor) {
+            document.documentElement.style.setProperty('--secondary-color', branding.secondaryColor);
+        }
+    }
+}
 
-        const link = document.createElement('a');
-        link.href = item.file;
-        link.download = item.title + '.pdf';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast('Download started', 'success');
-    },
-
-    // ============================================
-    // Admin Functions
-    // ============================================
-
-    loadAdminOverview() {
-        const students = DataManager.get(DataManager.KEYS.STUDENTS) || [];
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-
-        document.getElementById('adminStatStudents').textContent = students.length;
-        document.getElementById('adminStatPaid').textContent = students.filter(s => s.isPaid).length;
-        document.getElementById('adminStatNotes').textContent = notes.length;
-        document.getElementById('adminStatVideos').textContent = videos.length;
-    },
-
-    loadBrandingForm() {
-        const branding = DataManager.get(DataManager.KEYS.BRANDING);
-        if (!branding) return;
-
-        document.getElementById('siteName').value = branding.siteName || '';
-        document.getElementById('teacherName').value = branding.teacherName || '';
-        document.getElementById('className').value = branding.className || '';
-        document.getElementById('tagline').value = branding.tagline || '';
-        document.getElementById('primaryColor').value = branding.primaryColor || '#6366f1';
-        document.getElementById('primaryColorText').value = branding.primaryColor || '#6366f1';
-        document.getElementById('secondaryColor').value = branding.secondaryColor || '#8b5cf6';
-        document.getElementById('secondaryColorText').value = branding.secondaryColor || '#8b5cf6';
-        document.getElementById('contactEmail').value = branding.contactEmail || '';
-        document.getElementById('contactPhone').value = branding.contactPhone || '';
-        document.getElementById('whatsapp').value = branding.whatsapp || '';
-        document.getElementById('facebook').value = branding.facebook || '';
-        document.getElementById('youtube').value = branding.youtube || '';
-        document.getElementById('footerText').value = branding.footerText || '';
+async function loadBrandingForm() {
+    const branding = await getData('branding');
+    if (branding) {
+        document.getElementById('brandSiteName').value = branding.siteName || '';
+        document.getElementById('brandTeacherName').value = branding.teacherName || '';
+        document.getElementById('brandClassName').value = branding.className || '';
+        document.getElementById('brandTagline').value = branding.tagline || '';
+        document.getElementById('brandPrimaryColor').value = branding.primaryColor || '#6366f1';
+        document.getElementById('brandSecondaryColor').value = branding.secondaryColor || '#8b5cf6';
+        document.getElementById('brandEmail').value = branding.email || '';
+        document.getElementById('brandPhone').value = branding.phone || '';
+        document.getElementById('brandWhatsApp').value = branding.whatsapp || '';
+        document.getElementById('brandFacebook').value = branding.facebook || '';
+        document.getElementById('brandYouTube').value = branding.youtube || '';
+        document.getElementById('brandFooter').value = branding.footer || '';
 
         if (branding.logo) {
             document.getElementById('logoPreview').innerHTML = `<img src="${branding.logo}" alt="Logo">`;
         }
-    },
+    }
+}
 
-    handleLogoUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+async function saveBranding() {
+    const branding = {
+        siteName: document.getElementById('brandSiteName').value,
+        teacherName: document.getElementById('brandTeacherName').value,
+        className: document.getElementById('brandClassName').value,
+        tagline: document.getElementById('brandTagline').value,
+        primaryColor: document.getElementById('brandPrimaryColor').value,
+        secondaryColor: document.getElementById('brandSecondaryColor').value,
+        email: document.getElementById('brandEmail').value,
+        phone: document.getElementById('brandPhone').value,
+        whatsapp: document.getElementById('brandWhatsApp').value,
+        facebook: document.getElementById('brandFacebook').value,
+        youtube: document.getElementById('brandYouTube').value,
+        footer: document.getElementById('brandFooter').value
+    };
 
+    // Get existing logo
+    const existing = await getData('branding');
+    if (existing && existing.logo) {
+        branding.logo = existing.logo;
+    }
+
+    await setData('branding', branding);
+    
+    // Apply colors immediately
+    document.documentElement.style.setProperty('--primary-color', branding.primaryColor);
+    document.documentElement.style.setProperty('--secondary-color', branding.secondaryColor);
+    
+    showToast('Branding saved successfully!');
+}
+
+function handleLogoUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
         const reader = new FileReader();
-        reader.onload = (event) => {
-            document.getElementById('logoPreview').innerHTML = `<img src="${event.target.result}" alt="Logo">`;
+        reader.onload = async function(e) {
+            const logoData = e.target.result;
+            document.getElementById('logoPreview').innerHTML = `<img src="${logoData}" alt="Logo">`;
+            
+            // Save logo to branding
+            const branding = await getData('branding') || {};
+            branding.logo = logoData;
+            await setData('branding', branding);
+            
+            showToast('Logo uploaded!');
         };
         reader.readAsDataURL(file);
-    },
-
-    removeLogo() {
-        document.getElementById('logoPreview').innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-        `;
-        document.getElementById('logoFile').value = '';
-    },
-
-    saveBranding(e) {
-        e.preventDefault();
-        
-        const logoPreview = document.getElementById('logoPreview').querySelector('img');
-        const logo = logoPreview ? logoPreview.src : '';
-
-        const branding = {
-            siteName: document.getElementById('siteName').value,
-            teacherName: document.getElementById('teacherName').value,
-            className: document.getElementById('className').value,
-            tagline: document.getElementById('tagline').value,
-            logo: logo,
-            primaryColor: document.getElementById('primaryColor').value,
-            secondaryColor: document.getElementById('secondaryColor').value,
-            contactEmail: document.getElementById('contactEmail').value,
-            contactPhone: document.getElementById('contactPhone').value,
-            whatsapp: document.getElementById('whatsapp').value,
-            facebook: document.getElementById('facebook').value,
-            youtube: document.getElementById('youtube').value,
-            footerText: document.getElementById('footerText').value
-        };
-
-        DataManager.set(DataManager.KEYS.BRANDING, branding);
-        this.applyBranding();
-        showToast('Branding saved successfully!', 'success');
-    },
-
-    // Admin Notices
-    loadAdminNotices() {
-        const notices = DataManager.get(DataManager.KEYS.NOTICES) || [];
-        const tbody = document.getElementById('noticesTableBody');
-
-        if (notices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No notices added yet</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = notices.map(notice => `
-            <tr>
-                <td>${notice.title}</td>
-                <td><span class="table-badge ${notice.type}">${notice.type}</span></td>
-                <td><span class="table-badge ${notice.active ? 'active' : 'inactive'}">${notice.active ? 'Active' : 'Inactive'}</span></td>
-                <td>
-                    <div class="table-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="App.editNotice('${notice.id}')">Edit</button>
-                        <button class="btn btn-danger btn-sm" onclick="App.deleteNotice('${notice.id}')">Delete</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    },
-
-    saveNotice(e) {
-        e.preventDefault();
-        const id = document.getElementById('noticeId').value;
-        const notices = DataManager.get(DataManager.KEYS.NOTICES) || [];
-
-        const bannerImageInput = document.getElementById('bannerImage');
-        let bannerImage = '';
-        
-        if (bannerImageInput.files[0]) {
-            // This would need async handling in real implementation
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                bannerImage = event.target.result;
-                this.finishSaveNotice(id, notices, bannerImage);
-            };
-            reader.readAsDataURL(bannerImageInput.files[0]);
-        } else {
-            // Keep existing image if editing
-            const existing = notices.find(n => n.id === id);
-            bannerImage = existing?.image || '';
-            this.finishSaveNotice(id, notices, bannerImage);
-        }
-    },
-
-    finishSaveNotice(id, notices, bannerImage) {
-        const notice = {
-            id: id || DataManager.generateId(),
-            title: document.getElementById('noticeTitle').value,
-            content: document.getElementById('noticeContent').value,
-            type: document.getElementById('noticeType').value,
-            priority: document.getElementById('noticePriority').value,
-            active: document.getElementById('noticeActive').checked,
-            image: bannerImage
-        };
-
-        if (id) {
-            const index = notices.findIndex(n => n.id === id);
-            notices[index] = notice;
-        } else {
-            notices.push(notice);
-        }
-
-        DataManager.set(DataManager.KEYS.NOTICES, notices);
-        closeModal('noticeModal');
-        this.loadAdminNotices();
-        showToast('Notice saved successfully!', 'success');
-    },
-
-    editNotice(id) {
-        const notices = DataManager.get(DataManager.KEYS.NOTICES) || [];
-        const notice = notices.find(n => n.id === id);
-        if (!notice) return;
-
-        document.getElementById('noticeId').value = notice.id;
-        document.getElementById('noticeTitle').value = notice.title;
-        document.getElementById('noticeContent').value = notice.content || '';
-        document.getElementById('noticeType').value = notice.type;
-        document.getElementById('noticePriority').value = notice.priority;
-        document.getElementById('noticeActive').checked = notice.active;
-        document.getElementById('noticeModalTitle').textContent = 'Edit Notice/Banner';
-        
-        document.getElementById('bannerImageGroup').style.display = notice.type === 'banner' ? 'block' : 'none';
-
-        openModal('notice');
-    },
-
-    deleteNotice(id) {
-        if (!confirm('Are you sure you want to delete this notice?')) return;
-
-        const notices = DataManager.get(DataManager.KEYS.NOTICES) || [];
-        const filtered = notices.filter(n => n.id !== id);
-        DataManager.set(DataManager.KEYS.NOTICES, filtered);
-        this.loadAdminNotices();
-        showToast('Notice deleted', 'success');
-    },
-
-    // Admin Students
-    loadAdminStudents() {
-        const students = DataManager.get(DataManager.KEYS.STUDENTS) || [];
-        const tbody = document.getElementById('studentsTableBody');
-
-        if (students.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No students added yet</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = students.map(student => `
-            <tr>
-                <td>${student.name}</td>
-                <td>${student.email}</td>
-                <td><span class="table-badge ${student.isPaid ? 'paid' : 'free'}">${student.isPaid ? 'Paid' : 'Free'}</span></td>
-                <td>${student.expiryDate || '-'}</td>
-                <td>
-                    <div class="table-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="App.editStudent('${student.id}')">Edit</button>
-                        <button class="btn btn-danger btn-sm" onclick="App.deleteStudent('${student.id}')">Delete</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    },
-
-    saveStudent(e) {
-        e.preventDefault();
-        const id = document.getElementById('studentId').value;
-        const students = DataManager.get(DataManager.KEYS.STUDENTS) || [];
-
-        const student = {
-            id: id || DataManager.generateId(),
-            name: document.getElementById('studentName').value,
-            email: document.getElementById('studentEmail').value,
-            password: document.getElementById('studentPassword').value || (students.find(s => s.id === id)?.password) || '123456',
-            isPaid: document.getElementById('studentPaid').checked,
-            expiryDate: document.getElementById('studentExpiry').value
-        };
-
-        if (id) {
-            const index = students.findIndex(s => s.id === id);
-            students[index] = student;
-        } else {
-            students.push(student);
-        }
-
-        DataManager.set(DataManager.KEYS.STUDENTS, students);
-        closeModal('studentModal');
-        this.loadAdminStudents();
-        showToast('Student saved successfully!', 'success');
-    },
-
-    editStudent(id) {
-        const students = DataManager.get(DataManager.KEYS.STUDENTS) || [];
-        const student = students.find(s => s.id === id);
-        if (!student) return;
-
-        document.getElementById('studentId').value = student.id;
-        document.getElementById('studentName').value = student.name;
-        document.getElementById('studentEmail').value = student.email;
-        document.getElementById('studentPassword').value = '';
-        document.getElementById('studentPassword').placeholder = 'Leave blank to keep current';
-        document.getElementById('studentPaid').checked = student.isPaid;
-        document.getElementById('studentExpiry').value = student.expiryDate || '';
-        document.getElementById('studentModalTitle').textContent = 'Edit Student';
-
-        openModal('student');
-    },
-
-    deleteStudent(id) {
-        if (!confirm('Are you sure you want to delete this student?')) return;
-
-        const students = DataManager.get(DataManager.KEYS.STUDENTS) || [];
-        const filtered = students.filter(s => s.id !== id);
-        DataManager.set(DataManager.KEYS.STUDENTS, filtered);
-        this.loadAdminStudents();
-        showToast('Student deleted', 'success');
-    },
-
-    // Admin Notes
-    loadAdminNotes() {
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-        const tbody = document.getElementById('notesTableBody');
-
-        if (notes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No notes added yet</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = notes.map(note => `
-            <tr>
-                <td>${note.title}</td>
-                <td>${formatMonth(note.month)}</td>
-                <td><span class="table-badge ${note.paidOnly ? 'paid' : 'free'}">${note.paidOnly ? 'Paid' : 'Free'}</span></td>
-                <td><span class="table-badge ${note.downloadable ? 'yes' : 'no'}">${note.downloadable ? 'Yes' : 'No'}</span></td>
-                <td>
-                    <div class="table-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="App.editNote('${note.id}')">Edit</button>
-                        <button class="btn btn-danger btn-sm" onclick="App.deleteNote('${note.id}')">Delete</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    },
-
-    saveNote(e) {
-        e.preventDefault();
-        const id = document.getElementById('noteId').value;
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-
-        const fileInput = document.getElementById('noteFile');
-        const existingNote = notes.find(n => n.id === id);
-
-        if (fileInput.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                this.finishSaveNote(id, notes, event.target.result);
-            };
-            reader.readAsDataURL(fileInput.files[0]);
-        } else {
-            this.finishSaveNote(id, notes, existingNote?.file || '');
-        }
-    },
-
-    finishSaveNote(id, notes, fileData) {
-        const note = {
-            id: id || DataManager.generateId(),
-            title: document.getElementById('noteTitle').value,
-            description: document.getElementById('noteDescription').value,
-            month: document.getElementById('noteMonth').value,
-            file: fileData,
-            paidOnly: document.getElementById('notePaidOnly').checked,
-            downloadable: document.getElementById('noteDownloadable').checked
-        };
-
-        if (id) {
-            const index = notes.findIndex(n => n.id === id);
-            notes[index] = note;
-        } else {
-            notes.push(note);
-        }
-
-        DataManager.set(DataManager.KEYS.NOTES, notes);
-        closeModal('noteModal');
-        this.loadAdminNotes();
-        showToast('Note saved successfully!', 'success');
-    },
-
-    editNote(id) {
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-        const note = notes.find(n => n.id === id);
-        if (!note) return;
-
-        document.getElementById('noteId').value = note.id;
-        document.getElementById('noteTitle').value = note.title;
-        document.getElementById('noteDescription').value = note.description || '';
-        document.getElementById('noteMonth').value = note.month || '';
-        document.getElementById('notePaidOnly').checked = note.paidOnly;
-        document.getElementById('noteDownloadable').checked = note.downloadable;
-        document.getElementById('noteFileName').textContent = note.file ? 'File uploaded' : 'No file selected';
-        document.getElementById('noteModalTitle').textContent = 'Edit Note';
-
-        openModal('note');
-    },
-
-    deleteNote(id) {
-        if (!confirm('Are you sure you want to delete this note?')) return;
-
-        const notes = DataManager.get(DataManager.KEYS.NOTES) || [];
-        const filtered = notes.filter(n => n.id !== id);
-        DataManager.set(DataManager.KEYS.NOTES, filtered);
-        this.loadAdminNotes();
-        showToast('Note deleted', 'success');
-    },
-
-    // Admin Tutorials
-    loadAdminTutorials() {
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-        const tbody = document.getElementById('tutorialsTableBody');
-
-        if (tutorials.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No tutorials added yet</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = tutorials.map(tutorial => `
-            <tr>
-                <td>${tutorial.title}</td>
-                <td><span class="table-badge ${tutorial.type}">${tutorial.type === 'new' ? 'New' : 'Old'}</span></td>
-                <td>${formatMonth(tutorial.month)}</td>
-                <td><span class="table-badge ${tutorial.paidOnly ? 'paid' : 'free'}">${tutorial.paidOnly ? 'Paid' : 'Free'}</span></td>
-                <td><span class="table-badge ${tutorial.downloadable ? 'yes' : 'no'}">${tutorial.downloadable ? 'Yes' : 'No'}</span></td>
-                <td>
-                    <div class="table-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="App.editTutorial('${tutorial.id}')">Edit</button>
-                        <button class="btn btn-danger btn-sm" onclick="App.deleteTutorial('${tutorial.id}')">Delete</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    },
-
-    saveTutorial(e) {
-        e.preventDefault();
-        const id = document.getElementById('tutorialId').value;
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-
-        const fileInput = document.getElementById('tutorialFile');
-        const existingTutorial = tutorials.find(t => t.id === id);
-
-        if (fileInput.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                this.finishSaveTutorial(id, tutorials, event.target.result);
-            };
-            reader.readAsDataURL(fileInput.files[0]);
-        } else {
-            this.finishSaveTutorial(id, tutorials, existingTutorial?.file || '');
-        }
-    },
-
-    finishSaveTutorial(id, tutorials, fileData) {
-        const tutorial = {
-            id: id || DataManager.generateId(),
-            title: document.getElementById('tutorialTitle').value,
-            description: document.getElementById('tutorialDescription').value,
-            type: document.getElementById('tutorialType').value,
-            month: document.getElementById('tutorialMonth').value,
-            file: fileData,
-            paidOnly: document.getElementById('tutorialPaidOnly').checked,
-            downloadable: document.getElementById('tutorialDownloadable').checked
-        };
-
-        if (id) {
-            const index = tutorials.findIndex(t => t.id === id);
-            tutorials[index] = tutorial;
-        } else {
-            tutorials.push(tutorial);
-        }
-
-        DataManager.set(DataManager.KEYS.TUTORIALS, tutorials);
-        closeModal('tutorialModal');
-        this.loadAdminTutorials();
-        showToast('Tutorial saved successfully!', 'success');
-    },
-
-    editTutorial(id) {
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-        const tutorial = tutorials.find(t => t.id === id);
-        if (!tutorial) return;
-
-        document.getElementById('tutorialId').value = tutorial.id;
-        document.getElementById('tutorialTitle').value = tutorial.title;
-        document.getElementById('tutorialDescription').value = tutorial.description || '';
-        document.getElementById('tutorialType').value = tutorial.type;
-        document.getElementById('tutorialMonth').value = tutorial.month || '';
-        document.getElementById('tutorialPaidOnly').checked = tutorial.paidOnly;
-        document.getElementById('tutorialDownloadable').checked = tutorial.downloadable;
-        document.getElementById('tutorialFileName').textContent = tutorial.file ? 'File uploaded' : 'No file selected';
-        document.getElementById('tutorialModalTitle').textContent = 'Edit Tutorial';
-
-        openModal('tutorial');
-    },
-
-    deleteTutorial(id) {
-        if (!confirm('Are you sure you want to delete this tutorial?')) return;
-
-        const tutorials = DataManager.get(DataManager.KEYS.TUTORIALS) || [];
-        const filtered = tutorials.filter(t => t.id !== id);
-        DataManager.set(DataManager.KEYS.TUTORIALS, filtered);
-        this.loadAdminTutorials();
-        showToast('Tutorial deleted', 'success');
-    },
-
-    // Admin Videos
-    loadAdminVideos() {
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-        const tbody = document.getElementById('videosTableBody');
-
-        if (videos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No videos added yet</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = videos.map(video => `
-            <tr>
-                <td>${video.title}</td>
-                <td>${video.type === 'youtube' ? 'YouTube' : 'File'}</td>
-                <td>${formatMonth(video.month)}</td>
-                <td>${video.duration || '-'}</td>
-                <td><span class="table-badge ${video.paidOnly ? 'paid' : 'free'}">${video.paidOnly ? 'Paid' : 'Free'}</span></td>
-                <td><span class="table-badge ${video.downloadable ? 'yes' : 'no'}">${video.downloadable ? 'Yes' : 'No'}</span></td>
-                <td>
-                    <div class="table-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="App.editVideo('${video.id}')">Edit</button>
-                        <button class="btn btn-danger btn-sm" onclick="App.deleteVideo('${video.id}')">Delete</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    },
-
-    saveVideo(e) {
-        e.preventDefault();
-        const id = document.getElementById('videoId').value;
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-        const videoType = document.getElementById('videoType').value;
-
-        const existingVideo = videos.find(v => v.id === id);
-        const thumbnailInput = document.getElementById('videoThumbnail');
-        const videoFileInput = document.getElementById('videoFile');
-
-        // Handle thumbnail
-        const handleThumbnail = (callback) => {
-            if (thumbnailInput.files[0]) {
-                const reader = new FileReader();
-                reader.onload = (e) => callback(e.target.result);
-                reader.readAsDataURL(thumbnailInput.files[0]);
-            } else {
-                callback(existingVideo?.thumbnail || '');
-            }
-        };
-
-        // Handle video file
-        const handleVideoFile = (thumbnail, callback) => {
-            if (videoType === 'file' && videoFileInput.files[0]) {
-                const reader = new FileReader();
-                reader.onload = (e) => callback(thumbnail, e.target.result);
-                reader.readAsDataURL(videoFileInput.files[0]);
-            } else {
-                callback(thumbnail, existingVideo?.file || '');
-            }
-        };
-
-        handleThumbnail((thumbnail) => {
-            handleVideoFile(thumbnail, (thumb, videoFile) => {
-                this.finishSaveVideo(id, videos, thumb, videoFile);
-            });
-        });
-    },
-
-    finishSaveVideo(id, videos, thumbnail, videoFile) {
-        const videoType = document.getElementById('videoType').value;
-        
-        const video = {
-            id: id || DataManager.generateId(),
-            title: document.getElementById('videoTitle').value,
-            description: document.getElementById('videoDescription').value,
-            duration: document.getElementById('videoDuration').value,
-            month: document.getElementById('videoMonth').value,
-            type: videoType,
-            youtubeUrl: videoType === 'youtube' ? document.getElementById('videoYoutubeUrl').value : '',
-            file: videoType === 'file' ? videoFile : '',
-            thumbnail: thumbnail,
-            paidOnly: document.getElementById('videoPaidOnly').checked,
-            downloadable: document.getElementById('videoDownloadable').checked
-        };
-
-        if (id) {
-            const index = videos.findIndex(v => v.id === id);
-            videos[index] = video;
-        } else {
-            videos.push(video);
-        }
-
-        DataManager.set(DataManager.KEYS.VIDEOS, videos);
-        closeModal('videoModal');
-        this.loadAdminVideos();
-        showToast('Video saved successfully!', 'success');
-    },
-
-    editVideo(id) {
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-        const video = videos.find(v => v.id === id);
-        if (!video) return;
-
-        document.getElementById('videoId').value = video.id;
-        document.getElementById('videoTitle').value = video.title;
-        document.getElementById('videoDescription').value = video.description || '';
-        document.getElementById('videoDuration').value = video.duration || '';
-        document.getElementById('videoMonth').value = video.month || '';
-        document.getElementById('videoType').value = video.type;
-        document.getElementById('videoYoutubeUrl').value = video.youtubeUrl || '';
-        document.getElementById('videoPaidOnly').checked = video.paidOnly;
-        document.getElementById('videoDownloadable').checked = video.downloadable;
-        document.getElementById('videoModalTitle').textContent = 'Edit Video';
-
-        // Toggle video source fields
-        document.getElementById('youtubeUrlGroup').style.display = video.type === 'youtube' ? 'block' : 'none';
-        document.getElementById('videoFileGroup').style.display = video.type === 'file' ? 'block' : 'none';
-
-        openModal('video');
-    },
-
-    deleteVideo(id) {
-        if (!confirm('Are you sure you want to delete this video?')) return;
-
-        const videos = DataManager.get(DataManager.KEYS.VIDEOS) || [];
-        const filtered = videos.filter(v => v.id !== id);
-        DataManager.set(DataManager.KEYS.VIDEOS, filtered);
-        this.loadAdminVideos();
-        showToast('Video deleted', 'success');
-    },
-
-    // Admin Credentials
-    saveAdminCredentials(e) {
-        e.preventDefault();
-        const email = document.getElementById('newAdminEmail').value;
-        const password = document.getElementById('newAdminPassword').value;
-        const confirm = document.getElementById('confirmAdminPassword').value;
-
-        if (!email && !password) {
-            showToast('Please enter new credentials', 'error');
-            return;
-        }
-
-        if (password && password !== confirm) {
-            showToast('Passwords do not match', 'error');
-            return;
-        }
-
-        const admin = DataManager.get(DataManager.KEYS.ADMIN);
-        if (email) admin.email = email;
-        if (password) admin.password = password;
-
-        DataManager.set(DataManager.KEYS.ADMIN, admin);
-        showToast('Admin credentials updated', 'success');
-
-        // Clear form
-        document.getElementById('newAdminEmail').value = '';
-        document.getElementById('newAdminPassword').value = '';
-        document.getElementById('confirmAdminPassword').value = '';
-    },
-
-    // Export/Import
-    exportData() {
-        const data = {
-            branding: DataManager.get(DataManager.KEYS.BRANDING),
-            admin: DataManager.get(DataManager.KEYS.ADMIN),
-            students: DataManager.get(DataManager.KEYS.STUDENTS),
-            notes: DataManager.get(DataManager.KEYS.NOTES),
-            tutorials: DataManager.get(DataManager.KEYS.TUTORIALS),
-            videos: DataManager.get(DataManager.KEYS.VIDEOS),
-            notices: DataManager.get(DataManager.KEYS.NOTICES)
-        };
-
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'portal_backup_' + new Date().toISOString().split('T')[0] + '.json';
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('Data exported successfully', 'success');
-    },
-
-    importData(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const data = JSON.parse(event.target.result);
-                
-                if (data.branding) DataManager.set(DataManager.KEYS.BRANDING, data.branding);
-                if (data.admin) DataManager.set(DataManager.KEYS.ADMIN, data.admin);
-                if (data.students) DataManager.set(DataManager.KEYS.STUDENTS, data.students);
-                if (data.notes) DataManager.set(DataManager.KEYS.NOTES, data.notes);
-                if (data.tutorials) DataManager.set(DataManager.KEYS.TUTORIALS, data.tutorials);
-                if (data.videos) DataManager.set(DataManager.KEYS.VIDEOS, data.videos);
-                if (data.notices) DataManager.set(DataManager.KEYS.NOTICES, data.notices);
-
-                this.applyBranding();
-                this.loadAdminOverview();
-                showToast('Data imported successfully', 'success');
-            } catch (error) {
-                showToast('Invalid backup file', 'error');
-            }
-        };
-        reader.readAsText(file);
-        e.target.value = '';
-    },
-
-    resetAllData() {
-        if (!confirm('Are you sure? This will delete ALL data permanently!')) return;
-        if (!confirm('This action cannot be undone. Continue?')) return;
-
-        localStorage.clear();
-        DataManager.init();
-        this.applyBranding();
-        this.logout();
-        showToast('All data has been reset', 'success');
     }
-};
+}
+
+async function removeLogo() {
+    const branding = await getData('branding') || {};
+    branding.logo = '';
+    await setData('branding', branding);
+    document.getElementById('logoPreview').innerHTML = '<i class="fas fa-graduation-cap"></i>';
+    showToast('Logo removed');
+}
+
+function applyColorPreset(primary, secondary) {
+    document.getElementById('brandPrimaryColor').value = primary;
+    document.getElementById('brandSecondaryColor').value = secondary;
+}
 
 // ============================================
-// Helper Functions
+// Student Dashboard
 // ============================================
+async function loadStudentDashboard() {
+    if (!currentStudent) return;
 
-function openModal(type) {
-    const modalId = type + 'Modal';
-    const modal = document.getElementById(modalId);
-    if (!modal) return;
+    document.getElementById('studentName').textContent = currentStudent.name;
+    document.getElementById('welcomeName').textContent = currentStudent.name.split(' ')[0];
+    
+    const isPaid = currentStudent.status === 'paid';
+    const badge = document.getElementById('studentBadge');
+    badge.textContent = isPaid ? 'Paid' : 'Free';
+    badge.className = 'badge ' + (isPaid ? 'badge-success' : 'badge-warning');
 
-    // Reset form
-    const form = modal.querySelector('form');
-    if (form) form.reset();
+    // Load stats
+    const notes = await getData('notes') || {};
+    const tutes = await getData('tutes') || {};
+    const videos = await getData('videos') || {};
 
-    // Reset hidden inputs
-    const hiddenInput = modal.querySelector('input[type="hidden"]');
-    if (hiddenInput) hiddenInput.value = '';
+    const accessibleNotes = Object.values(notes).filter(n => isPaid || n.access === 'free').length;
+    const accessibleTutes = Object.values(tutes).filter(t => isPaid || t.access === 'free').length;
+    const accessibleVideos = Object.values(videos).filter(v => isPaid || v.access === 'free').length;
 
-    // Reset file names
-    modal.querySelectorAll('.file-upload-area span').forEach(span => {
-        span.textContent = 'No file selected';
+    document.getElementById('statNotes').textContent = accessibleNotes;
+    document.getElementById('statTutes').textContent = accessibleTutes;
+    document.getElementById('statVideos').textContent = accessibleVideos;
+
+    // Load notices
+    await loadStudentNotices();
+}
+
+async function loadStudentNotices() {
+    const notices = await getData('notices') || {};
+    const activeNotices = Object.entries(notices)
+        .filter(([id, n]) => n.active === true || n.active === 'true')
+        .map(([id, n]) => ({ id, ...n }));
+
+    const noticesSection = document.getElementById('noticesSection');
+    const bannersContainer = document.getElementById('bannersContainer');
+    const noticesContainer = document.getElementById('noticesContainer');
+
+    if (activeNotices.length === 0) {
+        noticesSection.classList.add('hidden');
+        return;
+    }
+
+    noticesSection.classList.remove('hidden');
+
+    // Separate banners and text notices
+    const banners = activeNotices.filter(n => n.type === 'banner');
+    const textNotices = activeNotices.filter(n => n.type === 'text');
+
+    // Render banners
+    bannersContainer.innerHTML = banners.map(b => `
+        <div class="banner-item" ${b.link ? `onclick="window.open('${b.link}', '_blank')"` : ''}>
+            <img src="${b.image}" alt="Banner">
+        </div>
+    `).join('');
+
+    // Render text notices
+    noticesContainer.innerHTML = textNotices.map(n => `
+        <div class="notice-item ${n.priority || 'normal'}">
+            <i class="fas ${n.priority === 'urgent' ? 'fa-exclamation-circle' : n.priority === 'important' ? 'fa-exclamation-triangle' : 'fa-info-circle'}"></i>
+            <div class="notice-content">
+                <h4>${n.title}</h4>
+                <p>${n.message}</p>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ============================================
+// Notes
+// ============================================
+async function loadNotes() {
+    const notes = await getData('notes') || {};
+    const isPaid = currentStudent && currentStudent.status === 'paid';
+
+    // Populate month filter
+    const months = [...new Set(Object.values(notes).map(n => n.month).filter(Boolean))].sort().reverse();
+    const monthFilter = document.getElementById('notesMonthFilter');
+    monthFilter.innerHTML = '<option value="all">All Months</option>' + 
+        months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+
+    filterNotes();
+}
+
+function filterNotes() {
+    const accessFilter = document.getElementById('notesAccessFilter').value;
+    const monthFilter = document.getElementById('notesMonthFilter').value;
+    
+    getData('notes').then(notes => {
+        const isPaid = currentStudent && currentStudent.status === 'paid';
+        let notesList = Object.entries(notes || {}).map(([id, n]) => ({ id, ...n }));
+
+        // Apply filters
+        if (accessFilter !== 'all') {
+            notesList = notesList.filter(n => n.access === accessFilter);
+        }
+        if (monthFilter !== 'all') {
+            notesList = notesList.filter(n => n.month === monthFilter);
+        }
+
+        renderNotes(notesList, isPaid);
     });
+}
 
-    // Reset title
-    const title = modal.querySelector('.modal-header h2');
-    if (title) {
-        const titleMap = {
-            'student': 'Add Student',
-            'note': 'Add Note',
-            'tutorial': 'Add Tutorial',
-            'video': 'Add Video',
-            'notice': 'Add Notice/Banner'
+function renderNotes(notes, isPaid) {
+    const container = document.getElementById('notesList');
+    
+    if (notes.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-file-alt"></i>
+                <p>No notes found</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = notes.map(note => {
+        const locked = note.access === 'paid' && !isPaid;
+        return `
+            <div class="content-card ${locked ? 'locked' : ''}">
+                <div class="card-thumbnail">
+                    <i class="fas fa-file-pdf"></i>
+                    ${locked ? `
+                        <div class="locked-overlay">
+                            <i class="fas fa-lock"></i>
+                            <span>Paid Students Only</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="card-content">
+                    <div class="card-badges">
+                        <span class="badge ${note.access === 'paid' ? 'badge-warning' : 'badge-success'}">
+                            ${note.access === 'paid' ? 'Paid' : 'Free'}
+                        </span>
+                        ${note.month ? `<span class="badge badge-info">${formatMonth(note.month)}</span>` : ''}
+                    </div>
+                    <h4>${note.title}</h4>
+                    <p>${note.description || 'No description'}</p>
+                    ${!locked ? `
+                        <div class="card-actions">
+                            <button class="btn btn-primary btn-sm" onclick="viewPdf('${note.id}', 'notes')">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                            ${note.downloadable === true || note.downloadable === 'true' ? `
+                                <button class="btn btn-outline btn-sm" onclick="downloadPdf('${note.id}', 'notes')">
+                                    <i class="fas fa-download"></i> Download
+                                </button>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============================================
+// Tutorials
+// ============================================
+async function loadTutes() {
+    const tutes = await getData('tutes') || {};
+    const isPaid = currentStudent && currentStudent.status === 'paid';
+
+    // Populate month filter
+    const months = [...new Set(Object.values(tutes).map(t => t.month).filter(Boolean))].sort().reverse();
+    const monthFilter = document.getElementById('tutesMonthFilter');
+    monthFilter.innerHTML = '<option value="all">All Months</option>' + 
+        months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+
+    filterTutes();
+}
+
+function filterTutes() {
+    const typeFilter = document.getElementById('tutesTypeFilter').value;
+    const accessFilter = document.getElementById('tutesAccessFilter').value;
+    const monthFilter = document.getElementById('tutesMonthFilter').value;
+    
+    getData('tutes').then(tutes => {
+        const isPaid = currentStudent && currentStudent.status === 'paid';
+        let tutesList = Object.entries(tutes || {}).map(([id, t]) => ({ id, ...t }));
+
+        // Apply filters
+        if (typeFilter !== 'all') {
+            tutesList = tutesList.filter(t => t.type === typeFilter);
+        }
+        if (accessFilter !== 'all') {
+            tutesList = tutesList.filter(t => t.access === accessFilter);
+        }
+        if (monthFilter !== 'all') {
+            tutesList = tutesList.filter(t => t.month === monthFilter);
+        }
+
+        renderTutes(tutesList, isPaid);
+    });
+}
+
+function renderTutes(tutes, isPaid) {
+    const container = document.getElementById('tutesList');
+    
+    if (tutes.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-book"></i>
+                <p>No tutorials found</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = tutes.map(tute => {
+        const locked = tute.access === 'paid' && !isPaid;
+        return `
+            <div class="content-card ${locked ? 'locked' : ''}">
+                <div class="card-thumbnail">
+                    <i class="fas fa-book-open"></i>
+                    ${locked ? `
+                        <div class="locked-overlay">
+                            <i class="fas fa-lock"></i>
+                            <span>Paid Students Only</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="card-content">
+                    <div class="card-badges">
+                        <span class="badge ${tute.type === 'new' ? 'badge-success' : 'badge-info'}">
+                            ${tute.type === 'new' ? 'New' : 'Old Paper'}
+                        </span>
+                        <span class="badge ${tute.access === 'paid' ? 'badge-warning' : 'badge-success'}">
+                            ${tute.access === 'paid' ? 'Paid' : 'Free'}
+                        </span>
+                        ${tute.month ? `<span class="badge badge-info">${formatMonth(tute.month)}</span>` : ''}
+                    </div>
+                    <h4>${tute.title}</h4>
+                    <p>${tute.description || 'No description'}</p>
+                    ${!locked ? `
+                        <div class="card-actions">
+                            <button class="btn btn-primary btn-sm" onclick="viewPdf('${tute.id}', 'tutes')">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                            ${tute.downloadable === true || tute.downloadable === 'true' ? `
+                                <button class="btn btn-outline btn-sm" onclick="downloadPdf('${tute.id}', 'tutes')">
+                                    <i class="fas fa-download"></i> Download
+                                </button>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============================================
+// Videos
+// ============================================
+async function loadVideos() {
+    const videos = await getData('videos') || {};
+    const isPaid = currentStudent && currentStudent.status === 'paid';
+
+    // Populate month filter
+    const months = [...new Set(Object.values(videos).map(v => v.month).filter(Boolean))].sort().reverse();
+    const monthFilter = document.getElementById('videosMonthFilter');
+    monthFilter.innerHTML = '<option value="all">All Months</option>' + 
+        months.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+
+    filterVideos();
+}
+
+function filterVideos() {
+    const accessFilter = document.getElementById('videosAccessFilter').value;
+    const monthFilter = document.getElementById('videosMonthFilter').value;
+    
+    getData('videos').then(videos => {
+        const isPaid = currentStudent && currentStudent.status === 'paid';
+        let videosList = Object.entries(videos || {}).map(([id, v]) => ({ id, ...v }));
+
+        // Apply filters
+        if (accessFilter !== 'all') {
+            videosList = videosList.filter(v => v.access === accessFilter);
+        }
+        if (monthFilter !== 'all') {
+            videosList = videosList.filter(v => v.month === monthFilter);
+        }
+
+        renderVideos(videosList, isPaid);
+    });
+}
+
+function renderVideos(videos, isPaid) {
+    const container = document.getElementById('videosList');
+    
+    if (videos.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-video"></i>
+                <p>No videos found</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = videos.map(video => {
+        const locked = video.access === 'paid' && !isPaid;
+        const thumbnail = video.thumbnail || getYouTubeThumbnail(video.youtube);
+        return `
+            <div class="content-card ${locked ? 'locked' : ''}">
+                <div class="card-thumbnail" ${!locked ? `onclick="playVideo('${video.id}')"` : ''} style="cursor: ${locked ? 'not-allowed' : 'pointer'}">
+                    ${thumbnail ? `<img src="${thumbnail}" alt="${video.title}">` : '<i class="fas fa-video"></i>'}
+                    ${!locked ? '<div class="play-overlay"><i class="fas fa-play-circle"></i></div>' : ''}
+                    ${locked ? `
+                        <div class="locked-overlay">
+                            <i class="fas fa-lock"></i>
+                            <span>Paid Students Only</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="card-content">
+                    <div class="card-badges">
+                        <span class="badge ${video.access === 'paid' ? 'badge-warning' : 'badge-success'}">
+                            ${video.access === 'paid' ? 'Paid' : 'Free'}
+                        </span>
+                        <span class="badge badge-info">${video.source === 'youtube' ? 'YouTube' : 'Video'}</span>
+                        ${video.month ? `<span class="badge badge-info">${formatMonth(video.month)}</span>` : ''}
+                    </div>
+                    <h4>${video.title}</h4>
+                    <p>${video.description || 'No description'}</p>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function getYouTubeThumbnail(url) {
+    if (!url) return null;
+    const videoId = extractYouTubeId(url);
+    return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
+}
+
+function extractYouTubeId(url) {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+}
+
+async function playVideo(videoId) {
+    const video = await getData(`videos/${videoId}`);
+    if (!video) return;
+
+    const modal = document.getElementById('videoModal');
+    const container = document.getElementById('videoContainer');
+    const title = document.getElementById('videoModalTitle');
+    const watermark = document.getElementById('videoWatermark');
+
+    title.textContent = video.title;
+
+    // Get branding for watermark
+    const branding = await getData('branding');
+    watermark.textContent = branding?.siteName || 'Media Studies A/L';
+
+    if (video.source === 'youtube' && video.youtube) {
+        const videoIdYT = extractYouTubeId(video.youtube);
+        container.innerHTML = `
+            <iframe 
+                src="https://www.youtube.com/embed/${videoIdYT}?rel=0&modestbranding=1&autoplay=1" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen>
+            </iframe>
+        `;
+    } else if (video.file) {
+        const controls = video.downloadable === true || video.downloadable === 'true' ? 'controls' : 'controls controlsList="nodownload"';
+        container.innerHTML = `
+            <video ${controls} autoplay oncontextmenu="return false;">
+                <source src="${video.file}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        `;
+    }
+
+    modal.classList.remove('hidden');
+
+    // Prevent right-click on video
+    container.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function closeVideoModal() {
+    const modal = document.getElementById('videoModal');
+    const container = document.getElementById('videoContainer');
+    container.innerHTML = '';
+    modal.classList.add('hidden');
+}
+
+// ============================================
+// PDF Viewing
+// ============================================
+let currentPdfData = null;
+let currentPdfName = null;
+
+async function viewPdf(id, type) {
+    const item = await getData(`${type}/${id}`);
+    if (!item || !item.file) {
+        showToast('File not found', true);
+        return;
+    }
+
+    currentPdfData = item.file;
+    currentPdfName = item.title + '.pdf';
+
+    const modal = document.getElementById('pdfModal');
+    const viewer = document.getElementById('pdfViewer');
+    const title = document.getElementById('pdfModalTitle');
+    const downloadBtn = document.getElementById('pdfDownloadBtn');
+
+    title.textContent = item.title;
+    viewer.src = item.file;
+
+    if (item.downloadable === true || item.downloadable === 'true') {
+        downloadBtn.classList.remove('hidden');
+    } else {
+        downloadBtn.classList.add('hidden');
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closePdfModal() {
+    const modal = document.getElementById('pdfModal');
+    const viewer = document.getElementById('pdfViewer');
+    viewer.src = '';
+    currentPdfData = null;
+    currentPdfName = null;
+    modal.classList.add('hidden');
+}
+
+function downloadCurrentPdf() {
+    if (currentPdfData && currentPdfName) {
+        const link = document.createElement('a');
+        link.href = currentPdfData;
+        link.download = currentPdfName;
+        link.click();
+    }
+}
+
+async function downloadPdf(id, type) {
+    const item = await getData(`${type}/${id}`);
+    if (!item || !item.file) {
+        showToast('File not found', true);
+        return;
+    }
+
+    const link = document.createElement('a');
+    link.href = item.file;
+    link.download = item.title + '.pdf';
+    link.click();
+}
+
+// ============================================
+// Admin Functions
+// ============================================
+async function loadAdminOverview() {
+    const students = await getData('students') || {};
+    const notes = await getData('notes') || {};
+    const tutes = await getData('tutes') || {};
+    const videos = await getData('videos') || {};
+    const notices = await getData('notices') || {};
+
+    const studentList = Object.values(students);
+    const paidStudents = studentList.filter(s => s.status === 'paid').length;
+    const activeNotices = Object.values(notices).filter(n => n.active === true || n.active === 'true').length;
+
+    document.getElementById('adminStatStudents').textContent = studentList.length;
+    document.getElementById('adminStatPaid').textContent = paidStudents;
+    document.getElementById('adminStatNotes').textContent = Object.keys(notes).length;
+    document.getElementById('adminStatTutes').textContent = Object.keys(tutes).length;
+    document.getElementById('adminStatVideos').textContent = Object.keys(videos).length;
+    document.getElementById('adminStatNotices').textContent = activeNotices;
+}
+
+// Admin Settings
+async function loadAdminSettings() {
+    const admin = await getData('admin');
+    if (admin) {
+        document.getElementById('adminEmail').value = admin.email || '';
+    }
+}
+
+async function updateAdminCredentials() {
+    const email = document.getElementById('adminEmail').value.trim();
+    const password = document.getElementById('adminPassword').value;
+
+    if (!email) {
+        showToast('Email is required', true);
+        return;
+    }
+
+    const admin = await getData('admin') || {};
+    admin.email = email;
+    if (password) {
+        admin.password = password;
+    }
+
+    await setData('admin', admin);
+    showToast('Admin credentials updated!');
+}
+
+async function resetAllData() {
+    if (confirm('Are you sure you want to reset ALL data? This cannot be undone!')) {
+        if (confirm('This will delete all students, notes, tutorials, videos, and notices. Continue?')) {
+            await deleteData('students');
+            await deleteData('notes');
+            await deleteData('tutes');
+            await deleteData('videos');
+            await deleteData('notices');
+            showToast('All data has been reset');
+            loadAdminOverview();
+        }
+    }
+}
+
+// ============================================
+// Admin - Notices
+// ============================================
+async function loadAdminNotices() {
+    const notices = await getData('notices') || {};
+    const tbody = document.getElementById('noticesTableBody');
+
+    if (Object.keys(notices).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">No notices yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = Object.entries(notices).map(([id, notice]) => `
+        <tr>
+            <td><span class="badge badge-info">${notice.type}</span></td>
+            <td>${notice.type === 'text' ? notice.title : 'Image Banner'}</td>
+            <td>${notice.type === 'text' ? `<span class="badge badge-${notice.priority === 'urgent' ? 'danger' : notice.priority === 'important' ? 'warning' : 'info'}">${notice.priority}</span>` : '-'}</td>
+            <td><span class="badge ${notice.active === true || notice.active === 'true' ? 'badge-success' : 'badge-danger'}">${notice.active === true || notice.active === 'true' ? 'Active' : 'Inactive'}</span></td>
+            <td>
+                <div class="table-actions">
+                    <button class="btn btn-outline btn-sm" onclick="editNotice('${id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteNotice('${id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openAddNoticeModal() {
+    document.getElementById('noticeModalTitle').textContent = 'Add Notice';
+    document.getElementById('noticeForm').reset();
+    document.getElementById('noticeId').value = '';
+    document.getElementById('bannerPreview').classList.add('hidden');
+    toggleNoticeFields();
+    document.getElementById('noticeModal').classList.remove('hidden');
+}
+
+function toggleNoticeFields() {
+    const type = document.getElementById('noticeFormType').value;
+    document.getElementById('textNoticeFields').classList.toggle('hidden', type !== 'text');
+    document.getElementById('bannerNoticeFields').classList.toggle('hidden', type !== 'banner');
+}
+
+function handleBannerUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('noticeFormImageData').value = e.target.result;
+            document.getElementById('bannerPreview').innerHTML = `<img src="${e.target.result}" alt="Banner">`;
+            document.getElementById('bannerPreview').classList.remove('hidden');
         };
-        title.textContent = titleMap[type] || 'Add Item';
+        reader.readAsDataURL(file);
     }
-
-    // Reset video type fields
-    if (type === 'video') {
-        document.getElementById('youtubeUrlGroup').style.display = 'block';
-        document.getElementById('videoFileGroup').style.display = 'none';
-    }
-
-    // Reset notice type fields
-    if (type === 'notice') {
-        document.getElementById('bannerImageGroup').style.display = 'none';
-    }
-
-    modal.classList.add('active');
 }
 
-function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('active');
+async function handleNoticeSubmit(e) {
+    e.preventDefault();
+    
+    const id = document.getElementById('noticeId').value;
+    const type = document.getElementById('noticeFormType').value;
+    
+    const notice = {
+        type: type,
+        active: document.getElementById('noticeFormActive').value === 'true'
+    };
+
+    if (type === 'text') {
+        notice.title = document.getElementById('noticeFormTitle').value;
+        notice.message = document.getElementById('noticeFormMessage').value;
+        notice.priority = document.getElementById('noticeFormPriority').value;
+    } else {
+        notice.image = document.getElementById('noticeFormImageData').value;
+        notice.link = document.getElementById('noticeFormLink').value;
+    }
+
+    if (id) {
+        await updateData(`notices/${id}`, notice);
+    } else {
+        await pushData('notices', notice);
+    }
+
+    closeNoticeModal();
+    loadAdminNotices();
+    showToast('Notice saved successfully!');
 }
 
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<span class="toast-message">${message}</span>`;
-    container.appendChild(toast);
+async function editNotice(id) {
+    const notice = await getData(`notices/${id}`);
+    if (!notice) return;
 
-    setTimeout(() => {
-        toast.style.animation = 'slideIn 0.3s ease reverse';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    document.getElementById('noticeModalTitle').textContent = 'Edit Notice';
+    document.getElementById('noticeId').value = id;
+    document.getElementById('noticeFormType').value = notice.type;
+    document.getElementById('noticeFormActive').value = String(notice.active);
+    
+    toggleNoticeFields();
+
+    if (notice.type === 'text') {
+        document.getElementById('noticeFormTitle').value = notice.title || '';
+        document.getElementById('noticeFormMessage').value = notice.message || '';
+        document.getElementById('noticeFormPriority').value = notice.priority || 'normal';
+    } else {
+        document.getElementById('noticeFormImageData').value = notice.image || '';
+        document.getElementById('noticeFormLink').value = notice.link || '';
+        if (notice.image) {
+            document.getElementById('bannerPreview').innerHTML = `<img src="${notice.image}" alt="Banner">`;
+            document.getElementById('bannerPreview').classList.remove('hidden');
+        }
+    }
+
+    document.getElementById('noticeModal').classList.remove('hidden');
 }
 
+async function deleteNotice(id) {
+    if (confirm('Are you sure you want to delete this notice?')) {
+        await deleteData(`notices/${id}`);
+        loadAdminNotices();
+        showToast('Notice deleted');
+    }
+}
+
+function closeNoticeModal() {
+    document.getElementById('noticeModal').classList.add('hidden');
+}
+
+// ============================================
+// Admin - Students
+// ============================================
+async function loadAdminStudents() {
+    const students = await getData('students') || {};
+    const tbody = document.getElementById('studentsTableBody');
+
+    if (Object.keys(students).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">No students yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = Object.entries(students).map(([id, student]) => `
+        <tr>
+            <td>${student.name}</td>
+            <td>${student.email}</td>
+            <td>${student.phone || '-'}</td>
+            <td><span class="badge ${student.status === 'paid' ? 'badge-success' : 'badge-warning'}">${student.status === 'paid' ? 'Paid' : 'Free'}</span></td>
+            <td>${student.expiry || '-'}</td>
+            <td>
+                <div class="table-actions">
+                    <button class="btn btn-outline btn-sm" onclick="editStudent('${id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteStudent('${id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openAddStudentModal() {
+    document.getElementById('studentModalTitle').textContent = 'Add Student';
+    document.getElementById('studentForm').reset();
+    document.getElementById('studentId').value = '';
+    document.getElementById('studentFormPassword').required = true;
+    document.getElementById('studentModal').classList.remove('hidden');
+}
+
+async function editStudent(id) {
+    const student = await getData(`students/${id}`);
+    if (!student) return;
+
+    document.getElementById('studentModalTitle').textContent = 'Edit Student';
+    document.getElementById('studentId').value = id;
+    document.getElementById('studentFormName').value = student.name;
+    document.getElementById('studentFormEmail').value = student.email;
+    document.getElementById('studentFormPassword').value = '';
+    document.getElementById('studentFormPassword').required = false;
+    document.getElementById('studentFormPhone').value = student.phone || '';
+    document.getElementById('studentFormStatus').value = student.status;
+    document.getElementById('studentFormExpiry').value = student.expiry || '';
+
+    document.getElementById('studentModal').classList.remove('hidden');
+}
+
+async function handleStudentSubmit(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('studentId').value;
+    const student = {
+        name: document.getElementById('studentFormName').value,
+        email: document.getElementById('studentFormEmail').value,
+        phone: document.getElementById('studentFormPhone').value,
+        status: document.getElementById('studentFormStatus').value,
+        expiry: document.getElementById('studentFormExpiry').value
+    };
+
+    const password = document.getElementById('studentFormPassword').value;
+    if (password) {
+        student.password = password;
+    } else if (id) {
+        // Keep existing password
+        const existing = await getData(`students/${id}`);
+        if (existing) {
+            student.password = existing.password;
+        }
+    }
+
+    if (id) {
+        await updateData(`students/${id}`, student);
+    } else {
+        await pushData('students', student);
+    }
+
+    closeStudentModal();
+    loadAdminStudents();
+    showToast('Student saved successfully!');
+}
+
+async function deleteStudent(id) {
+    if (confirm('Are you sure you want to delete this student?')) {
+        await deleteData(`students/${id}`);
+        loadAdminStudents();
+        showToast('Student deleted');
+    }
+}
+
+function closeStudentModal() {
+    document.getElementById('studentModal').classList.add('hidden');
+}
+
+// ============================================
+// Admin - Notes
+// ============================================
+async function loadAdminNotes() {
+    const notes = await getData('notes') || {};
+    const tbody = document.getElementById('notesTableBody');
+
+    if (Object.keys(notes).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">No notes yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = Object.entries(notes).map(([id, note]) => `
+        <tr>
+            <td>${note.title}</td>
+            <td>${note.month ? formatMonth(note.month) : '-'}</td>
+            <td><span class="badge ${note.access === 'paid' ? 'badge-warning' : 'badge-success'}">${note.access === 'paid' ? 'Paid' : 'Free'}</span></td>
+            <td>${note.downloadable === true || note.downloadable === 'true' ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>'}</td>
+            <td>
+                <div class="table-actions">
+                    <button class="btn btn-outline btn-sm" onclick="editNote('${id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteNote('${id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openAddNoteModal() {
+    document.getElementById('noteModalTitle').textContent = 'Add Note';
+    document.getElementById('noteForm').reset();
+    document.getElementById('noteId').value = '';
+    document.getElementById('noteFormFileData').value = '';
+    document.getElementById('noteFileName').textContent = '';
+    document.getElementById('noteModal').classList.remove('hidden');
+}
+
+function handleNoteFileUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('noteFormFileData').value = e.target.result;
+            document.getElementById('noteFileName').textContent = file.name;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function editNote(id) {
+    const note = await getData(`notes/${id}`);
+    if (!note) return;
+
+    document.getElementById('noteModalTitle').textContent = 'Edit Note';
+    document.getElementById('noteId').value = id;
+    document.getElementById('noteFormTitle').value = note.title;
+    document.getElementById('noteFormDescription').value = note.description || '';
+    document.getElementById('noteFormMonth').value = note.month || '';
+    document.getElementById('noteFormAccess').value = note.access;
+    document.getElementById('noteFormDownloadable').value = String(note.downloadable);
+    document.getElementById('noteFormFileData').value = note.file || '';
+    document.getElementById('noteFileName').textContent = note.file ? 'File uploaded' : '';
+
+    document.getElementById('noteModal').classList.remove('hidden');
+}
+
+async function handleNoteSubmit(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('noteId').value;
+    const fileData = document.getElementById('noteFormFileData').value;
+
+    if (!fileData && !id) {
+        showToast('Please upload a PDF file', true);
+        return;
+    }
+
+    const note = {
+        title: document.getElementById('noteFormTitle').value,
+        description: document.getElementById('noteFormDescription').value,
+        month: document.getElementById('noteFormMonth').value,
+        access: document.getElementById('noteFormAccess').value,
+        downloadable: document.getElementById('noteFormDownloadable').value === 'true'
+    };
+
+    if (fileData) {
+        note.file = fileData;
+    } else if (id) {
+        const existing = await getData(`notes/${id}`);
+        if (existing) {
+            note.file = existing.file;
+        }
+    }
+
+    if (id) {
+        await updateData(`notes/${id}`, note);
+    } else {
+        await pushData('notes', note);
+    }
+
+    closeNoteModal();
+    loadAdminNotes();
+    showToast('Note saved successfully!');
+}
+
+async function deleteNote(id) {
+    if (confirm('Are you sure you want to delete this note?')) {
+        await deleteData(`notes/${id}`);
+        loadAdminNotes();
+        showToast('Note deleted');
+    }
+}
+
+function closeNoteModal() {
+    document.getElementById('noteModal').classList.add('hidden');
+}
+
+// ============================================
+// Admin - Tutorials
+// ============================================
+async function loadAdminTutes() {
+    const tutes = await getData('tutes') || {};
+    const tbody = document.getElementById('tutesTableBody');
+
+    if (Object.keys(tutes).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">No tutorials yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = Object.entries(tutes).map(([id, tute]) => `
+        <tr>
+            <td>${tute.title}</td>
+            <td><span class="badge badge-info">${tute.type === 'new' ? 'New' : 'Old'}</span></td>
+            <td>${tute.month ? formatMonth(tute.month) : '-'}</td>
+            <td><span class="badge ${tute.access === 'paid' ? 'badge-warning' : 'badge-success'}">${tute.access === 'paid' ? 'Paid' : 'Free'}</span></td>
+            <td>${tute.downloadable === true || tute.downloadable === 'true' ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>'}</td>
+            <td>
+                <div class="table-actions">
+                    <button class="btn btn-outline btn-sm" onclick="editTute('${id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteTute('${id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openAddTuteModal() {
+    document.getElementById('tuteModalTitle').textContent = 'Add Tutorial';
+    document.getElementById('tuteForm').reset();
+    document.getElementById('tuteId').value = '';
+    document.getElementById('tuteFormFileData').value = '';
+    document.getElementById('tuteFileName').textContent = '';
+    document.getElementById('tuteModal').classList.remove('hidden');
+}
+
+function handleTuteFileUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('tuteFormFileData').value = e.target.result;
+            document.getElementById('tuteFileName').textContent = file.name;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function editTute(id) {
+    const tute = await getData(`tutes/${id}`);
+    if (!tute) return;
+
+    document.getElementById('tuteModalTitle').textContent = 'Edit Tutorial';
+    document.getElementById('tuteId').value = id;
+    document.getElementById('tuteFormTitle').value = tute.title;
+    document.getElementById('tuteFormDescription').value = tute.description || '';
+    document.getElementById('tuteFormType').value = tute.type;
+    document.getElementById('tuteFormMonth').value = tute.month || '';
+    document.getElementById('tuteFormAccess').value = tute.access;
+    document.getElementById('tuteFormDownloadable').value = String(tute.downloadable);
+    document.getElementById('tuteFormFileData').value = tute.file || '';
+    document.getElementById('tuteFileName').textContent = tute.file ? 'File uploaded' : '';
+
+    document.getElementById('tuteModal').classList.remove('hidden');
+}
+
+async function handleTuteSubmit(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('tuteId').value;
+    const fileData = document.getElementById('tuteFormFileData').value;
+
+    if (!fileData && !id) {
+        showToast('Please upload a PDF file', true);
+        return;
+    }
+
+    const tute = {
+        title: document.getElementById('tuteFormTitle').value,
+        description: document.getElementById('tuteFormDescription').value,
+        type: document.getElementById('tuteFormType').value,
+        month: document.getElementById('tuteFormMonth').value,
+        access: document.getElementById('tuteFormAccess').value,
+        downloadable: document.getElementById('tuteFormDownloadable').value === 'true'
+    };
+
+    if (fileData) {
+        tute.file = fileData;
+    } else if (id) {
+        const existing = await getData(`tutes/${id}`);
+        if (existing) {
+            tute.file = existing.file;
+        }
+    }
+
+    if (id) {
+        await updateData(`tutes/${id}`, tute);
+    } else {
+        await pushData('tutes', tute);
+    }
+
+    closeTuteModal();
+    loadAdminTutes();
+    showToast('Tutorial saved successfully!');
+}
+
+async function deleteTute(id) {
+    if (confirm('Are you sure you want to delete this tutorial?')) {
+        await deleteData(`tutes/${id}`);
+        loadAdminTutes();
+        showToast('Tutorial deleted');
+    }
+}
+
+function closeTuteModal() {
+    document.getElementById('tuteModal').classList.add('hidden');
+}
+
+// ============================================
+// Admin - Videos
+// ============================================
+async function loadAdminVideos() {
+    const videos = await getData('videos') || {};
+    const tbody = document.getElementById('videosTableBody');
+
+    if (Object.keys(videos).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">No videos yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = Object.entries(videos).map(([id, video]) => `
+        <tr>
+            <td>${video.title}</td>
+            <td><span class="badge badge-info">${video.source === 'youtube' ? 'YouTube' : 'File'}</span></td>
+            <td>${video.month ? formatMonth(video.month) : '-'}</td>
+            <td><span class="badge ${video.access === 'paid' ? 'badge-warning' : 'badge-success'}">${video.access === 'paid' ? 'Paid' : 'Free'}</span></td>
+            <td>${video.downloadable === true || video.downloadable === 'true' ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>'}</td>
+            <td>
+                <div class="table-actions">
+                    <button class="btn btn-outline btn-sm" onclick="editVideo('${id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteVideo('${id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openAddVideoModal() {
+    document.getElementById('videoFormModalTitle').textContent = 'Add Video';
+    document.getElementById('videoForm').reset();
+    document.getElementById('videoId').value = '';
+    document.getElementById('videoFormFileData').value = '';
+    document.getElementById('videoFormThumbnailData').value = '';
+    document.getElementById('videoFileName').textContent = '';
+    document.getElementById('thumbnailPreview').classList.add('hidden');
+    document.getElementById('videoFormSource').value = 'youtube';
+    switchVideoSource('youtube');
+    document.getElementById('videoFormModal').classList.remove('hidden');
+}
+
+function switchVideoSource(source) {
+    document.getElementById('videoFormSource').value = source;
+    document.querySelectorAll('.source-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.source === source);
+    });
+    document.getElementById('youtubeSourceInput').classList.toggle('hidden', source !== 'youtube');
+    document.getElementById('fileSourceInput').classList.toggle('hidden', source !== 'file');
+}
+
+function handleVideoFileUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        if (file.size > 50 * 1024 * 1024) {
+            showToast('Video file is too large. Max 50MB for file upload. Consider using YouTube instead.', true);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('videoFormFileData').value = e.target.result;
+            document.getElementById('videoFileName').textContent = file.name;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function handleThumbnailUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('videoFormThumbnailData').value = e.target.result;
+            document.getElementById('thumbnailPreview').innerHTML = `<img src="${e.target.result}" alt="Thumbnail">`;
+            document.getElementById('thumbnailPreview').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function editVideo(id) {
+    const video = await getData(`videos/${id}`);
+    if (!video) return;
+
+    document.getElementById('videoFormModalTitle').textContent = 'Edit Video';
+    document.getElementById('videoId').value = id;
+    document.getElementById('videoFormTitle').value = video.title;
+    document.getElementById('videoFormDescription').value = video.description || '';
+    document.getElementById('videoFormMonth').value = video.month || '';
+    document.getElementById('videoFormAccess').value = video.access;
+    document.getElementById('videoFormDownloadable').value = String(video.downloadable);
+    document.getElementById('videoFormSource').value = video.source;
+    
+    switchVideoSource(video.source);
+    
+    if (video.source === 'youtube') {
+        document.getElementById('videoFormYouTube').value = video.youtube || '';
+    } else {
+        document.getElementById('videoFormFileData').value = video.file || '';
+        document.getElementById('videoFileName').textContent = video.file ? 'Video uploaded' : '';
+    }
+
+    if (video.thumbnail) {
+        document.getElementById('videoFormThumbnailData').value = video.thumbnail;
+        document.getElementById('thumbnailPreview').innerHTML = `<img src="${video.thumbnail}" alt="Thumbnail">`;
+        document.getElementById('thumbnailPreview').classList.remove('hidden');
+    }
+
+    document.getElementById('videoFormModal').classList.remove('hidden');
+}
+
+async function handleVideoSubmit(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('videoId').value;
+    const source = document.getElementById('videoFormSource').value;
+    const youtubeUrl = document.getElementById('videoFormYouTube').value;
+    const fileData = document.getElementById('videoFormFileData').value;
+
+    if (source === 'youtube' && !youtubeUrl) {
+        showToast('Please enter a YouTube URL', true);
+        return;
+    }
+
+    if (source === 'file' && !fileData && !id) {
+        showToast('Please upload a video file', true);
+        return;
+    }
+
+    const video = {
+        title: document.getElementById('videoFormTitle').value,
+        description: document.getElementById('videoFormDescription').value,
+        month: document.getElementById('videoFormMonth').value,
+        access: document.getElementById('videoFormAccess').value,
+        downloadable: document.getElementById('videoFormDownloadable').value === 'true',
+        source: source
+    };
+
+    if (source === 'youtube') {
+        video.youtube = youtubeUrl;
+        video.thumbnail = getYouTubeThumbnail(youtubeUrl);
+    } else {
+        if (fileData) {
+            video.file = fileData;
+        } else if (id) {
+            const existing = await getData(`videos/${id}`);
+            if (existing) {
+                video.file = existing.file;
+            }
+        }
+    }
+
+    const thumbnailData = document.getElementById('videoFormThumbnailData').value;
+    if (thumbnailData) {
+        video.thumbnail = thumbnailData;
+    }
+
+    if (id) {
+        await updateData(`videos/${id}`, video);
+    } else {
+        await pushData('videos', video);
+    }
+
+    closeVideoFormModal();
+    loadAdminVideos();
+    showToast('Video saved successfully!');
+}
+
+async function deleteVideo(id) {
+    if (confirm('Are you sure you want to delete this video?')) {
+        await deleteData(`videos/${id}`);
+        loadAdminVideos();
+        showToast('Video deleted');
+    }
+}
+
+function closeVideoFormModal() {
+    document.getElementById('videoFormModal').classList.add('hidden');
+}
+
+// ============================================
+// Utility Functions
+// ============================================
 function formatMonth(monthStr) {
-    if (!monthStr) return 'N/A';
+    if (!monthStr) return '';
     const [year, month] = monthStr.split('-');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${months[parseInt(month) - 1]} ${year}`;
 }
 
-function navigateTo(page) {
-    App.navigateStudent(page);
+function showToast(message, isError = false) {
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    toastMessage.textContent = message;
+    toast.classList.toggle('error', isError);
+    toast.querySelector('i').className = isError ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
+    
+    toast.classList.remove('hidden');
+    
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 3000);
 }
 
-function navigateAdmin(page) {
-    App.navigateAdmin(page);
-}
-
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    App.init();
-});
-
-// Prevent keyboard shortcuts for downloading/inspecting
-document.addEventListener('keydown', (e) => {
-    // Prevent Ctrl+S, Ctrl+Shift+I, F12
-    if ((e.ctrlKey && e.key === 's') || 
-        (e.ctrlKey && e.shiftKey && e.key === 'I') || 
-        e.key === 'F12') {
-        e.preventDefault();
+// Keyboard shortcut prevention for protected content
+document.addEventListener('keydown', function(e) {
+    // Check if video modal is open
+    const videoModal = document.getElementById('videoModal');
+    if (!videoModal.classList.contains('hidden')) {
+        // Prevent Ctrl+S, Ctrl+U, F12
+        if ((e.ctrlKey && (e.key === 's' || e.key === 'u')) || e.key === 'F12') {
+            e.preventDefault();
+            return false;
+        }
     }
 });
