@@ -2,22 +2,18 @@
 // Firebase Configuration & Initialization
 // ============================================
 let db = null;
-let firebaseConfig = null;
 
-// Check if Firebase is configured
-function checkFirebaseConfig() {
-    const savedConfig = localStorage.getItem('firebaseConfig');
-    if (savedConfig) {
-        try {
-            firebaseConfig = JSON.parse(savedConfig);
-            initializeFirebase();
-            return true;
-        } catch (e) {
-            return false;
-        }
-    }
-    return false;
-}
+// Hardcoded Firebase Configuration for Production
+const firebaseConfig = {
+    apiKey: "AIzaSyBq985tA8gVnbP6SzmFHBW09k7DClSUJ5o",
+    authDomain: "thashmila-55fdf.firebaseapp.com",
+    databaseURL: "https://thashmila-55fdf-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "thashmila-55fdf",
+    storageBucket: "thashmila-55fdf.firebasestorage.app",
+    messagingSenderId: "698960373298",
+    appId: "1:698960373298:web:e6ebe8d67182cad0763e2b",
+    measurementId: "G-YVS407538H"
+};
 
 // Initialize Firebase
 function initializeFirebase() {
@@ -34,74 +30,40 @@ function initializeFirebase() {
     }
 }
 
-// Save Firebase Config
-function saveFirebaseConfig() {
-    const config = {
-        apiKey: document.getElementById('firebaseApiKey').value.trim(),
-        authDomain: document.getElementById('firebaseAuthDomain').value.trim(),
-        databaseURL: document.getElementById('firebaseDatabaseURL').value.trim(),
-        projectId: document.getElementById('firebaseProjectId').value.trim(),
-        storageBucket: document.getElementById('firebaseStorageBucket').value.trim(),
-        messagingSenderId: document.getElementById('firebaseMessagingSenderId').value.trim(),
-        appId: document.getElementById('firebaseAppId').value.trim()
-    };
-
-    // Validate required fields
-    if (!config.apiKey || !config.databaseURL || !config.projectId) {
-        showToast('Please fill in API Key, Database URL, and Project ID', true);
-        return;
-    }
-
-    localStorage.setItem('firebaseConfig', JSON.stringify(config));
-    firebaseConfig = config;
-    
-    if (initializeFirebase()) {
-        // Initialize default data
-        initializeDefaultData().then(() => {
-            document.getElementById('setupScreen').classList.add('hidden');
-            document.getElementById('loginPage').classList.remove('hidden');
-            showToast('Firebase connected successfully!');
-        });
-    } else {
-        showToast('Failed to connect to Firebase. Please check your configuration.', true);
-    }
-}
-
-// Reset Firebase Config
-function resetFirebaseConfig() {
-    if (confirm('Are you sure you want to reconfigure Firebase? You will need to enter your configuration again.')) {
-        localStorage.removeItem('firebaseConfig');
-        location.reload();
-    }
-}
-
 // Initialize default data in Firebase
 async function initializeDefaultData() {
-    const snapshot = await db.ref('admin').once('value');
-    if (!snapshot.exists()) {
-        await db.ref('admin').set({
-            email: 'admin@admin.com',
-            password: 'admin123'
-        });
-    }
+    try {
+        const snapshot = await db.ref('admin').once('value');
+        if (!snapshot.exists()) {
+            await db.ref('admin').set({
+                email: 'admin@admin.com',
+                password: 'admin123'
+            });
+            console.log('Default admin credentials created: admin@admin.com / admin123');
+        }
 
-    const brandingSnapshot = await db.ref('branding').once('value');
-    if (!brandingSnapshot.exists()) {
-        await db.ref('branding').set({
-            siteName: 'Media Studies A/L',
-            teacherName: '',
-            className: '',
-            tagline: 'Online Learning Portal',
-            logo: '',
-            primaryColor: '#6366f1',
-            secondaryColor: '#8b5cf6',
-            email: '',
-            phone: '',
-            whatsapp: '',
-            facebook: '',
-            youtube: '',
-            footer: '© 2024 Media Studies A/L. All rights reserved.'
-        });
+        const brandingSnapshot = await db.ref('branding').once('value');
+        if (!brandingSnapshot.exists()) {
+            await db.ref('branding').set({
+                siteName: 'Media Studies A/L',
+                teacherName: '',
+                className: '',
+                tagline: 'Online Learning Portal',
+                logo: '',
+                primaryColor: '#6366f1',
+                secondaryColor: '#8b5cf6',
+                email: '',
+                phone: '',
+                whatsapp: '',
+                facebook: '',
+                youtube: '',
+                footer: '© 2024 Media Studies A/L. All rights reserved.'
+            });
+        }
+        return true;
+    } catch (error) {
+        console.error('Error initializing default data:', error);
+        return false;
     }
 }
 
@@ -214,14 +176,17 @@ function updateThemeIcons() {
 // ============================================
 // App Initialization
 // ============================================
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     initTheme();
     
-    if (!checkFirebaseConfig()) {
-        // Show setup screen
-        document.getElementById('loadingScreen').classList.add('hidden');
-        document.getElementById('setupScreen').classList.remove('hidden');
-    } else {
+    // Initialize Firebase directly (no setup screen needed)
+    if (initializeFirebase()) {
+        // Wait for Firebase to be ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Ensure default data exists
+        await initializeDefaultData();
+        
         // Check for existing session
         const session = getSession();
         if (session) {
@@ -234,6 +199,18 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             showLoginPage();
         }
+    } else {
+        // Firebase failed to initialize
+        document.getElementById('loadingScreen').innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem;"></i>
+                <h2>Connection Error</h2>
+                <p>Failed to connect to the database. Please refresh the page.</p>
+                <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 1rem;">
+                    <i class="fas fa-refresh"></i> Refresh
+                </button>
+            </div>
+        `;
     }
 
     // Setup event listeners
@@ -373,33 +350,58 @@ async function handleLogin(e) {
 
     errorDiv.classList.add('hidden');
 
-    if (isAdmin) {
-        const admin = await getData('admin');
-        if (admin && admin.email === email && admin.password === password) {
-            saveSession({ email }, 'admin');
-            showAdminDashboard();
-        } else {
-            errorDiv.textContent = 'Invalid admin credentials';
-            errorDiv.classList.remove('hidden');
-        }
-    } else {
-        const students = await getData('students');
-        if (students) {
-            const studentEntry = Object.entries(students).find(([id, s]) => 
-                s.email === email && s.password === password
-            );
-            if (studentEntry) {
-                currentStudent = { id: studentEntry[0], ...studentEntry[1] };
-                saveSession(currentStudent, 'student');
-                showStudentDashboard();
+    if (!db) {
+        errorDiv.textContent = 'Database not connected. Please refresh and try again.';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        if (isAdmin) {
+            const admin = await getData('admin');
+            console.log('Admin data:', admin);
+            
+            if (!admin) {
+                // Try to create default admin
+                await db.ref('admin').set({
+                    email: 'admin@admin.com',
+                    password: 'admin123'
+                });
+                errorDiv.textContent = 'Admin initialized. Try: admin@admin.com / admin123';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
+            if (admin.email === email && admin.password === password) {
+                saveSession({ email }, 'admin');
+                showAdminDashboard();
             } else {
-                errorDiv.textContent = 'Invalid email or password';
+                errorDiv.textContent = 'Invalid admin credentials';
                 errorDiv.classList.remove('hidden');
             }
         } else {
-            errorDiv.textContent = 'No students registered. Please contact admin.';
-            errorDiv.classList.remove('hidden');
+            const students = await getData('students');
+            if (students) {
+                const studentEntry = Object.entries(students).find(([id, s]) => 
+                    s.email === email && s.password === password
+                );
+                if (studentEntry) {
+                    currentStudent = { id: studentEntry[0], ...studentEntry[1] };
+                    saveSession(currentStudent, 'student');
+                    showStudentDashboard();
+                } else {
+                    errorDiv.textContent = 'Invalid email or password';
+                    errorDiv.classList.remove('hidden');
+                }
+            } else {
+                errorDiv.textContent = 'No students registered. Please contact admin.';
+                errorDiv.classList.remove('hidden');
+            }
         }
+    } catch (error) {
+        console.error('Login error:', error);
+        errorDiv.textContent = 'Login failed. Please check your connection.';
+        errorDiv.classList.remove('hidden');
     }
 }
 

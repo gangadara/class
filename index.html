@@ -12,79 +12,7 @@
 </head>
 <body>
     <div id="app">
-        <!-- Setup Screen (First Time) -->
-        <div id="setupScreen" class="setup-screen hidden">
-            <div class="setup-container">
-                <div class="setup-header">
-                    <i class="fas fa-cogs"></i>
-                    <h1>Firebase Setup Required</h1>
-                    <p>To make this app work online, you need to connect it to Firebase (free)</p>
-                </div>
-                
-                <div class="setup-steps">
-                    <div class="step">
-                        <div class="step-number">1</div>
-                        <div class="step-content">
-                            <h3>Create Firebase Project</h3>
-                            <p>Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> and create a new project</p>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-number">2</div>
-                        <div class="step-content">
-                            <h3>Create Realtime Database</h3>
-                            <p>In Firebase Console → Build → Realtime Database → Create Database → Start in <strong>Test Mode</strong></p>
-                        </div>
-                    </div>
-                    <div class="step">
-                        <div class="step-number">3</div>
-                        <div class="step-content">
-                            <h3>Get Web Config</h3>
-                            <p>Project Settings → General → Your Apps → Web App → Register App → Copy config</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="setup-form">
-                    <h3><i class="fas fa-key"></i> Enter Your Firebase Config</h3>
-                    <div class="form-group">
-                        <label>API Key</label>
-                        <input type="text" id="firebaseApiKey" placeholder="AIzaSy...">
-                    </div>
-                    <div class="form-group">
-                        <label>Auth Domain</label>
-                        <input type="text" id="firebaseAuthDomain" placeholder="your-project.firebaseapp.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Database URL</label>
-                        <input type="text" id="firebaseDatabaseURL" placeholder="https://your-project-default-rtdb.firebaseio.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Project ID</label>
-                        <input type="text" id="firebaseProjectId" placeholder="your-project-id">
-                    </div>
-                    <div class="form-group">
-                        <label>Storage Bucket</label>
-                        <input type="text" id="firebaseStorageBucket" placeholder="your-project.appspot.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Messaging Sender ID</label>
-                        <input type="text" id="firebaseMessagingSenderId" placeholder="123456789">
-                    </div>
-                    <div class="form-group">
-                        <label>App ID</label>
-                        <input type="text" id="firebaseAppId" placeholder="1:123456789:web:abc123">
-                    </div>
-                    <button type="button" class="btn btn-primary btn-lg" onclick="saveFirebaseConfig()">
-                        <i class="fas fa-check"></i> Connect & Continue
-                    </button>
-                    <p class="setup-note">
-                        <i class="fas fa-info-circle"></i> 
-                        This config is saved in your browser. Each admin/device needs to enter this once.
-                    </p>
-                </div>
-            </div>
-        </div>
+        <!-- Setup Screen removed - Firebase is preconfigured -->
 
         <!-- Loading Screen -->
         <div id="loadingScreen" class="loading-screen">
@@ -704,13 +632,7 @@
                             </button>
                         </div>
 
-                        <div class="form-card">
-                            <h3><i class="fas fa-database"></i> Firebase Configuration</h3>
-                            <p class="text-muted">Your Firebase is connected. To change configuration, click below:</p>
-                            <button class="btn btn-outline" onclick="resetFirebaseConfig()">
-                                <i class="fas fa-cog"></i> Reconfigure Firebase
-                            </button>
-                        </div>
+                        <!-- Firebase is preconfigured - no reconfiguration needed -->
 
                         <div class="form-card danger-zone">
                             <h3><i class="fas fa-exclamation-triangle"></i> Danger Zone</h3>
