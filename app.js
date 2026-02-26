@@ -261,10 +261,10 @@ async function initializeDefaultData() {
         const brandingSnapshot = await db.ref(brandingPath).once('value');
         if (!brandingSnapshot.exists()) {
             await db.ref(brandingPath).set({
-                siteName: 'Media Studies A/L',
+                siteName: 'My Learning Portal',
                 teacherName: '',
                 className: '',
-                tagline: 'Online Learning Portal',
+                tagline: 'Welcome to Your Online Learning Platform',
                 logo: '',
                 primaryColor: '#6366f1',
                 secondaryColor: '#8b5cf6',
@@ -273,7 +273,7 @@ async function initializeDefaultData() {
                 whatsapp: '',
                 facebook: '',
                 youtube: '',
-                footer: '© 2024 Media Studies A/L. All rights reserved.'
+                footer: '© ' + new Date().getFullYear() + ' Learning Portal. All rights reserved.'
             });
         }
         return true;
@@ -284,8 +284,11 @@ async function initializeDefaultData() {
 }
 
 // ============================================
-// Database Operations (with license path support)
+// Database Operations (with license path support & caching)
 // ============================================
+const dataCache = {};
+const CACHE_DURATION = 30000; // 30 seconds cache
+
 function getFullPath(path) {
     if (licenseBasePath && !path.startsWith('superAdmin')) {
         return `${licenseBasePath}/${path}`;
@@ -293,14 +296,38 @@ function getFullPath(path) {
     return path;
 }
 
-async function getData(path) {
+async function getData(path, useCache = true) {
     try {
         const fullPath = getFullPath(path);
+        
+        // Check cache first (only for certain paths)
+        if (useCache && dataCache[fullPath] && Date.now() - dataCache[fullPath].timestamp < CACHE_DURATION) {
+            return dataCache[fullPath].data;
+        }
+        
         const snapshot = await db.ref(fullPath).once('value');
-        return snapshot.val();
+        const data = snapshot.val();
+        
+        // Cache the result
+        dataCache[fullPath] = {
+            data: data,
+            timestamp: Date.now()
+        };
+        
+        return data;
     } catch (error) {
         console.error('Error getting data:', error);
         return null;
+    }
+}
+
+// Clear specific cache or all cache
+function clearCache(path = null) {
+    if (path) {
+        const fullPath = getFullPath(path);
+        delete dataCache[fullPath];
+    } else {
+        Object.keys(dataCache).forEach(key => delete dataCache[key]);
     }
 }
 
@@ -308,6 +335,7 @@ async function setData(path, data) {
     try {
         const fullPath = getFullPath(path);
         await db.ref(fullPath).set(data);
+        clearCache(path); // Clear cache after update
         return true;
     } catch (error) {
         console.error('Error setting data:', error);
@@ -319,6 +347,7 @@ async function pushData(path, data) {
     try {
         const fullPath = getFullPath(path);
         const ref = await db.ref(fullPath).push(data);
+        clearCache(path); // Clear cache after push
         return ref.key;
     } catch (error) {
         console.error('Error pushing data:', error);
@@ -330,6 +359,7 @@ async function updateData(path, data) {
     try {
         const fullPath = getFullPath(path);
         await db.ref(fullPath).update(data);
+        clearCache(path); // Clear cache after update
         return true;
     } catch (error) {
         console.error('Error updating data:', error);
@@ -341,6 +371,7 @@ async function deleteData(path) {
     try {
         const fullPath = getFullPath(path);
         await db.ref(fullPath).remove();
+        clearCache(path); // Clear cache after delete
         return true;
     } catch (error) {
         console.error('Error deleting data:', error);
@@ -879,9 +910,9 @@ function logout() {
 async function loadBrandingForLogin() {
     const branding = await getData('branding');
     if (branding) {
-        document.getElementById('loginSiteName').textContent = branding.siteName || 'Media Studies A/L';
-        document.getElementById('loginTagline').textContent = branding.tagline || 'Online Learning Portal';
-        document.getElementById('loginFooterText').textContent = branding.footer || '© 2024 Media Studies A/L';
+        document.getElementById('loginSiteName').textContent = branding.siteName || 'My Learning Portal';
+        document.getElementById('loginTagline').textContent = branding.tagline || 'Welcome to Your Online Learning Platform';
+        document.getElementById('loginFooterText').textContent = branding.footer || '© ' + new Date().getFullYear() + ' Learning Portal';
         
         if (branding.logo) {
             document.getElementById('loginLogo').innerHTML = `<img src="${branding.logo}" alt="Logo">`;
@@ -899,7 +930,7 @@ async function loadBrandingForLogin() {
 async function loadBranding() {
     const branding = await getData('branding');
     if (branding) {
-        document.getElementById('studentSiteName').textContent = branding.siteName || 'Media Studies A/L';
+        document.getElementById('studentSiteName').textContent = branding.siteName || 'My Learning Portal';
         
         if (branding.logo) {
             document.getElementById('studentLogo').innerHTML = `<img src="${branding.logo}" alt="Logo">`;
@@ -1473,7 +1504,7 @@ async function playVideo(videoId) {
     title.textContent = video.title;
 
     const branding = await getData('branding');
-    watermark.textContent = branding?.siteName || 'Media Studies A/L';
+    watermark.textContent = branding?.siteName || 'Learning Portal';
 
     if (video.source === 'youtube' && video.youtube) {
         const videoIdYT = extractYouTubeId(video.youtube);
@@ -1551,7 +1582,7 @@ async function viewPdf(id, type) {
     title.textContent = item.title;
 
     const branding = await getData('branding');
-    const watermarkText = branding?.siteName || 'Media Studies A/L';
+    const watermarkText = branding?.siteName || 'Learning Portal';
 
     if (currentPdfDownloadable) {
         viewerContainer.innerHTML = `
@@ -1875,8 +1906,54 @@ function closeNoticeModal() {
 // Admin - Students
 // ============================================
 async function loadAdminStudents() {
-    const students = await getData('students') || {};
     const tbody = document.getElementById('studentsTableBody');
+    if (!tbody) {
+        console.error('Students table body not found');
+        return;
+    }
+    
+    // Show loading
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+    
+    console.log('Loading students... License path:', licenseBasePath);
+    
+    try {
+        // Get students directly from Firebase without cache
+        const fullPath = licenseBasePath ? `${licenseBasePath}/students` : 'students';
+        console.log('Fetching from path:', fullPath);
+        
+        const snapshot = await db.ref(fullPath).once('value');
+        const students = snapshot.val() || {};
+        
+        console.log('Students data:', students);
+        console.log('Students loaded:', Object.keys(students).length);
+        
+        const studentCount = Object.keys(students).length;
+    
+    // Get student limit from license
+    let studentLimit = 100;
+    let limitInfo = '';
+    if (currentLicenseKey) {
+        try {
+            const licenseSnapshot = await db.ref(`superAdmin/licenses/${currentLicenseKey}/studentLimit`).once('value');
+            studentLimit = licenseSnapshot.val() || 100;
+            const remaining = studentLimit - studentCount;
+            limitInfo = `<div class="student-limit-info" style="margin-bottom: 1rem; padding: 0.75rem; background: var(--card-bg); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span><i class="fas fa-users"></i> Students: <strong>${studentCount}</strong> / ${studentLimit}</span>
+                <span style="color: ${remaining <= 5 ? 'var(--danger)' : 'var(--text-secondary)'};">${remaining} slots remaining</span>
+            </div>`;
+        } catch (e) {
+            console.log('Could not fetch student limit');
+        }
+    }
+    
+    // Add limit info before table
+    const tableContainer = tbody.closest('.data-table-container');
+    if (tableContainer) {
+        let limitInfoEl = tableContainer.parentElement.querySelector('.student-limit-info');
+        if (limitInfoEl) limitInfoEl.remove();
+        tableContainer.insertAdjacentHTML('beforebegin', limitInfo);
+    }
 
     if (Object.keys(students).length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">No students yet</td></tr>';
@@ -1902,6 +1979,11 @@ async function loadAdminStudents() {
             </td>
         </tr>
     `).join('');
+    
+    } catch (error) {
+        console.error('Error loading students:', error);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--danger);">Error loading students. Please refresh.</td></tr>';
+    }
 }
 
 function openAddStudentModal() {
@@ -1933,6 +2015,28 @@ async function handleStudentSubmit(e) {
     e.preventDefault();
 
     const id = document.getElementById('studentId').value;
+    const fullPath = licenseBasePath ? `${licenseBasePath}/students` : 'students';
+    
+    // Check student limit for new students
+    if (!id && currentLicenseKey) {
+        try {
+            const licenseSnapshot = await db.ref(`superAdmin/licenses/${currentLicenseKey}`).once('value');
+            const license = licenseSnapshot.val();
+            const studentLimit = license?.studentLimit || 100;
+            
+            const studentsSnapshot = await db.ref(fullPath).once('value');
+            const students = studentsSnapshot.val() || {};
+            const currentCount = Object.keys(students).length;
+            
+            if (currentCount >= studentLimit) {
+                showToast(`Student limit reached (${studentLimit}). Contact your administrator to increase the limit.`, true);
+                return;
+            }
+        } catch (error) {
+            console.error('Error checking student limit:', error);
+        }
+    }
+    
     const student = {
         name: document.getElementById('studentFormName').value,
         email: document.getElementById('studentFormEmail').value,
@@ -1945,21 +2049,32 @@ async function handleStudentSubmit(e) {
     if (password) {
         student.password = password;
     } else if (id) {
-        const existing = await getData(`students/${id}`);
-        if (existing) {
+        // Get existing password
+        const existingSnapshot = await db.ref(`${fullPath}/${id}`).once('value');
+        const existing = existingSnapshot.val();
+        if (existing && existing.password) {
             student.password = existing.password;
         }
     }
 
-    if (id) {
-        await updateData(`students/${id}`, student);
-    } else {
-        await pushData('students', student);
+    try {
+        if (id) {
+            // Update existing student
+            await db.ref(`${fullPath}/${id}`).update(student);
+            console.log('Student updated:', id);
+        } else {
+            // Add new student
+            const newRef = await db.ref(fullPath).push(student);
+            console.log('Student added:', newRef.key);
+        }
+        
+        closeStudentModal();
+        await loadAdminStudents();
+        showToast('Student saved successfully!');
+    } catch (error) {
+        console.error('Error saving student:', error);
+        showToast('Failed to save student. Please try again.', true);
     }
-
-    closeStudentModal();
-    loadAdminStudents();
-    showToast('Student saved successfully!');
 }
 
 async function deleteStudent(id) {
