@@ -146,6 +146,7 @@ async function loadRestrictions() {
         
         // Site status
         document.getElementById('siteEnabledToggle').checked = restrictions.siteEnabled !== false;
+        document.getElementById('maintenanceTitle').value = restrictions.maintenanceTitle || 'Site Under Maintenance';
         document.getElementById('maintenanceMessage').value = restrictions.maintenanceMessage || '';
         updateSiteStatusText(restrictions.siteEnabled !== false);
         
@@ -163,8 +164,57 @@ async function loadRestrictions() {
         document.getElementById('adminStudentsToggle').checked = adminFeatures.students !== false;
         document.getElementById('adminNoticesToggle').checked = adminFeatures.notices !== false;
         document.getElementById('adminBrandingToggle').checked = adminFeatures.branding !== false;
+        
+        // Load teacher notices for control
+        await loadTeacherNotices();
     } catch (error) {
         console.error('Error loading restrictions:', error);
+    }
+}
+
+// Load Teacher Notices for Control
+async function loadTeacherNotices() {
+    try {
+        const noticesSnapshot = await db.ref('notices').once('value');
+        const notices = noticesSnapshot.val() || {};
+        
+        const restrictionsSnapshot = await db.ref('superAdmin/restrictions/noticeRestrictions').once('value');
+        const noticeRestrictions = restrictionsSnapshot.val() || {};
+        
+        const container = document.getElementById('teacherNoticesList');
+        
+        if (Object.keys(notices).length === 0) {
+            container.innerHTML = '<p style="color: #9ca3af; text-align: center;">No notices published by teacher yet.</p>';
+            return;
+        }
+        
+        container.innerHTML = Object.entries(notices).map(([id, notice]) => {
+            const isEnabled = noticeRestrictions[id] !== false;
+            return `
+                <div class="notice-control-item">
+                    <div class="notice-info">
+                        <span class="notice-type-badge ${notice.type}">${notice.type}</span>
+                        <span class="notice-title">${notice.type === 'text' ? notice.title : 'Image Banner'}</span>
+                    </div>
+                    <label class="toggle-switch small">
+                        <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleNotice('${id}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading teacher notices:', error);
+    }
+}
+
+// Toggle Individual Notice
+async function toggleNotice(noticeId, enabled) {
+    try {
+        await db.ref(`superAdmin/restrictions/noticeRestrictions/${noticeId}`).set(enabled);
+        showToast(`Notice ${enabled ? 'enabled' : 'disabled'} for students`, 'success');
+    } catch (error) {
+        showToast('Error updating notice', 'error');
     }
 }
 
@@ -222,10 +272,12 @@ async function loadStatistics() {
 // Save Site Status
 document.getElementById('saveSiteStatus').addEventListener('click', async () => {
     const siteEnabled = document.getElementById('siteEnabledToggle').checked;
+    const maintenanceTitle = document.getElementById('maintenanceTitle').value;
     const maintenanceMessage = document.getElementById('maintenanceMessage').value;
     
     try {
         await db.ref('superAdmin/restrictions/siteEnabled').set(siteEnabled);
+        await db.ref('superAdmin/restrictions/maintenanceTitle').set(maintenanceTitle);
         await db.ref('superAdmin/restrictions/maintenanceMessage').set(maintenanceMessage);
         showToast('Site status saved successfully!', 'success');
     } catch (error) {

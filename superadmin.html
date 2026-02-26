@@ -67,9 +67,15 @@
                             <span class="super-slider"></span>
                         </label>
                     </div>
-                    <div class="maintenance-message">
-                        <label>Maintenance Message (shown when site is disabled)</label>
-                        <textarea id="maintenanceMessage" rows="3" placeholder="Site is under maintenance. Please try again later."></textarea>
+                    <div class="maintenance-fields">
+                        <div class="form-group">
+                            <label>Maintenance Title</label>
+                            <input type="text" id="maintenanceTitle" placeholder="Site Under Maintenance">
+                        </div>
+                        <div class="form-group">
+                            <label>Maintenance Message</label>
+                            <textarea id="maintenanceMessage" rows="3" placeholder="We are currently performing maintenance. Please check back later."></textarea>
+                        </div>
                     </div>
                     <button id="saveSiteStatus" class="super-btn super-btn-primary">
                         <i class="fas fa-save"></i> Save Site Status
@@ -234,6 +240,19 @@
                             <div class="stat-value" id="statNotices">0</div>
                             <div class="stat-label">Notices</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teacher Notices Control Card -->
+            <div class="super-card">
+                <div class="super-card-header">
+                    <h2><i class="fas fa-bell-slash"></i> Teacher Notices Control</h2>
+                </div>
+                <div class="super-card-body">
+                    <p class="card-description">Control which notices published by teacher are shown to students</p>
+                    <div id="teacherNoticesList" class="teacher-notices-list">
+                        <p style="color: #9ca3af; text-align: center;">Loading notices...</p>
                     </div>
                 </div>
             </div>

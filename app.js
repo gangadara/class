@@ -15,6 +15,13 @@ const firebaseConfig = {
     measurementId: "G-YVS407538H"
 };
 
+// ============================================
+// License & Control System
+// ============================================
+// This ensures the site only works when super admin allows it
+// Even if teacher deletes superadmin files, this check runs from Firebase
+const LICENSE_CHECK_ENABLED = true;
+
 // Initialize Firebase
 function initializeFirebase() {
     try {
@@ -178,20 +185,49 @@ function updateThemeIcons() {
 }
 
 // ============================================
-// Super Admin Restrictions
+// Super Admin Restrictions & License System
 // ============================================
 let superAdminRestrictions = {
     siteEnabled: true,
-    maintenanceMessage: 'Site is under maintenance. Please try again later.',
+    maintenanceTitle: 'Site Under Maintenance',
+    maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
     studentFeatures: { notes: true, tutes: true, videos: true },
-    adminFeatures: { notes: true, tutes: true, videos: true, students: true, notices: true, branding: true }
+    adminFeatures: { notes: true, tutes: true, videos: true, students: true, notices: true, branding: true },
+    noticeRestrictions: {} // Individual notice on/off control
 };
+
+async function checkLicenseAndRestrictions() {
+    try {
+        // This check ALWAYS runs - even if teacher deletes superadmin files
+        // The data is in Firebase, so teacher cannot bypass this
+        const restrictions = await getData('superAdmin/restrictions');
+        
+        if (restrictions) {
+            superAdminRestrictions = { ...superAdminRestrictions, ...restrictions };
+        }
+        
+        // Check if site is enabled
+        if (superAdminRestrictions.siteEnabled === false) {
+            showMaintenancePage(
+                superAdminRestrictions.maintenanceTitle || 'Site Unavailable',
+                superAdminRestrictions.maintenanceMessage || 'This site is currently unavailable. Please contact the administrator.'
+            );
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error checking license:', error);
+        // If Firebase fails, show error (prevents bypassing by blocking Firebase)
+        return true; // Allow site if Firebase check fails (network issue)
+    }
+}
 
 async function loadSuperAdminRestrictions() {
     try {
         const restrictions = await getData('superAdmin/restrictions');
         if (restrictions) {
-            superAdminRestrictions = restrictions;
+            superAdminRestrictions = { ...superAdminRestrictions, ...restrictions };
         }
         return superAdminRestrictions;
     } catch (error) {
@@ -200,7 +236,7 @@ async function loadSuperAdminRestrictions() {
     }
 }
 
-function showMaintenancePage(message) {
+function showMaintenancePage(title, message) {
     document.getElementById('loadingScreen').classList.add('hidden');
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('studentDashboard').classList.add('hidden');
@@ -218,8 +254,9 @@ function showMaintenancePage(message) {
     maintenancePage.innerHTML = `
         <div class="maintenance-content">
             <i class="fas fa-tools"></i>
-            <h1>Site Under Maintenance</h1>
+            <h1>${title || 'Site Under Maintenance'}</h1>
             <p>${message || 'We are currently performing maintenance. Please check back later.'}</p>
+            <small style="margin-top: 2rem; opacity: 0.6; display: block;">Please contact the administrator for assistance.</small>
         </div>
     `;
     maintenancePage.classList.remove('hidden');
@@ -284,14 +321,15 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Ensure default data exists
             await initializeDefaultData();
             
-            // Load super admin restrictions
-            await loadSuperAdminRestrictions();
-            
-            // Check if site is disabled
-            if (superAdminRestrictions.siteEnabled === false) {
-                showMaintenancePage(superAdminRestrictions.maintenanceMessage);
-                return;
+            // CRITICAL: Check license and restrictions from Firebase
+            // This check cannot be bypassed by deleting files - data is in Firebase
+            const licenseValid = await checkLicenseAndRestrictions();
+            if (!licenseValid) {
+                return; // Site is disabled by super admin
             }
+            
+            // Load full restrictions for feature control
+            await loadSuperAdminRestrictions();
             
             // Check for existing session
             const session = getSession();
@@ -770,8 +808,17 @@ async function loadTeacherInfoBar() {
 
 async function loadStudentNotices() {
     const notices = await getData('notices') || {};
+    
+    // Get super admin notice restrictions
+    const noticeRestrictions = superAdminRestrictions.noticeRestrictions || {};
+    
+    // Filter active notices AND check super admin restrictions
     const activeNotices = Object.entries(notices)
-        .filter(([id, n]) => n.active === true || n.active === 'true')
+        .filter(([id, n]) => {
+            const isActive = n.active === true || n.active === 'true';
+            const isEnabledBySuperAdmin = noticeRestrictions[id] !== false;
+            return isActive && isEnabledBySuperAdmin;
+        })
         .map(([id, n]) => ({ id, ...n }));
 
     const noticesSection = document.getElementById('noticesSection');
