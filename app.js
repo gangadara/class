@@ -601,6 +601,85 @@ async function loadStudentDashboard() {
 
     // Load notices
     await loadStudentNotices();
+    
+    // Load about teacher section
+    await loadAboutTeacher();
+}
+
+async function loadAboutTeacher() {
+    const branding = await getData('branding');
+    const aboutSection = document.getElementById('aboutTeacherSection');
+    
+    if (!branding || (!branding.teacherName && !branding.email && !branding.phone)) {
+        aboutSection.classList.add('hidden');
+        return;
+    }
+    
+    aboutSection.classList.remove('hidden');
+    
+    // Build contact items
+    let contactItems = '';
+    
+    if (branding.email) {
+        contactItems += `
+            <a href="mailto:${branding.email}" class="teacher-contact-item">
+                <i class="fas fa-envelope"></i>
+                <span>${branding.email}</span>
+            </a>
+        `;
+    }
+    
+    if (branding.phone) {
+        contactItems += `
+            <a href="tel:${branding.phone}" class="teacher-contact-item">
+                <i class="fas fa-phone"></i>
+                <span>${branding.phone}</span>
+            </a>
+        `;
+    }
+    
+    if (branding.whatsapp) {
+        contactItems += `
+            <a href="https://wa.me/${branding.whatsapp.replace(/[^0-9]/g, '')}" target="_blank" class="teacher-contact-item">
+                <i class="fab fa-whatsapp"></i>
+                <span>WhatsApp</span>
+            </a>
+        `;
+    }
+    
+    if (branding.facebook) {
+        contactItems += `
+            <a href="${branding.facebook}" target="_blank" class="teacher-contact-item">
+                <i class="fab fa-facebook"></i>
+                <span>Facebook</span>
+            </a>
+        `;
+    }
+    
+    if (branding.youtube) {
+        contactItems += `
+            <a href="${branding.youtube}" target="_blank" class="teacher-contact-item">
+                <i class="fab fa-youtube"></i>
+                <span>YouTube</span>
+            </a>
+        `;
+    }
+    
+    aboutSection.innerHTML = `
+        <h3><i class="fas fa-chalkboard-teacher"></i> About Your Teacher</h3>
+        <div class="teacher-profile">
+            ${branding.logo ? 
+                `<img src="${branding.logo}" alt="Teacher" class="teacher-avatar">` : 
+                `<div class="teacher-avatar-placeholder"><i class="fas fa-user"></i></div>`
+            }
+            <div class="teacher-info">
+                <h4>${branding.teacherName || 'Your Teacher'}</h4>
+                ${branding.className ? `<p class="class-name">${branding.className}</p>` : ''}
+                ${branding.tagline ? `<p class="tagline">"${branding.tagline}"</p>` : ''}
+                ${contactItems ? `<div class="teacher-contact-grid">${contactItems}</div>` : ''}
+            </div>
+        </div>
+    `;
 }
 
 async function loadStudentNotices() {
@@ -691,6 +770,13 @@ function filterNotes() {
         if (monthFilter !== 'all') {
             notesList = notesList.filter(n => n.month === monthFilter);
         }
+
+        // Sort by newest first (createdAt timestamp or by ID which is chronological in Firebase)
+        notesList.sort((a, b) => {
+            const dateA = a.createdAt || 0;
+            const dateB = b.createdAt || 0;
+            return dateB - dateA;
+        });
 
         renderNotes(notesList, isPaid);
     });
@@ -789,6 +875,13 @@ function filterTutes() {
             tutesList = tutesList.filter(t => t.month === monthFilter);
         }
 
+        // Sort by newest first
+        tutesList.sort((a, b) => {
+            const dateA = a.createdAt || 0;
+            const dateB = b.createdAt || 0;
+            return dateB - dateA;
+        });
+
         renderTutes(tutesList, isPaid);
     });
 }
@@ -884,6 +977,13 @@ function filterVideos() {
         if (monthFilter !== 'all') {
             videosList = videosList.filter(v => v.month === monthFilter);
         }
+
+        // Sort by newest first
+        videosList.sort((a, b) => {
+            const dateA = a.createdAt || 0;
+            const dateB = b.createdAt || 0;
+            return dateB - dateA;
+        });
 
         renderVideos(videosList, isPaid);
     });
@@ -1001,11 +1101,15 @@ async function playVideo(videoId) {
     } else if (video.source === 'gdrive' && video.gdrive) {
         const driveId = extractGoogleDriveId(video.gdrive);
         if (driveId) {
+            // Google Drive with blocker overlay to hide "Open in new window" button
             container.innerHTML = `
+                <div class="gdrive-top-bar"></div>
+                <div class="gdrive-blocker"><i class="fas fa-shield-alt"></i></div>
                 <iframe 
                     src="https://drive.google.com/file/d/${driveId}/preview" 
                     allow="autoplay; encrypted-media" 
-                    allowfullscreen>
+                    allowfullscreen
+                    sandbox="allow-scripts allow-same-origin">
                 </iframe>
             `;
         } else {
@@ -1564,8 +1668,14 @@ async function handleNoteSubmit(e) {
     }
 
     if (id) {
+        // Keep original createdAt
+        const existing = await getData(`notes/${id}`);
+        if (existing && existing.createdAt) {
+            note.createdAt = existing.createdAt;
+        }
         await updateData(`notes/${id}`, note);
     } else {
+        note.createdAt = Date.now();
         await pushData('notes', note);
     }
 
@@ -1688,8 +1798,14 @@ async function handleTuteSubmit(e) {
     }
 
     if (id) {
+        // Keep original createdAt
+        const existing = await getData(`tutes/${id}`);
+        if (existing && existing.createdAt) {
+            tute.createdAt = existing.createdAt;
+        }
         await updateData(`tutes/${id}`, tute);
     } else {
+        tute.createdAt = Date.now();
         await pushData('tutes', tute);
     }
 
@@ -1890,8 +2006,14 @@ async function handleVideoSubmit(e) {
     }
 
     if (id) {
+        // Keep original createdAt
+        const existing = await getData(`videos/${id}`);
+        if (existing && existing.createdAt) {
+            video.createdAt = existing.createdAt;
+        }
         await updateData(`videos/${id}`, video);
     } else {
+        video.createdAt = Date.now();
         await pushData('videos', video);
     }
 
