@@ -535,16 +535,33 @@ function applyFeatureRestrictions(userType) {
 let needsLicenseActivation = false;
 
 document.addEventListener('DOMContentLoaded', async function() {
+    console.log('DOM Content Loaded - Initializing app...');
+    
     initTheme();
+    
+    // Setup event listeners first
+    setupEventListeners();
+    
+    // Mobile sidebar click outside to close
+    document.addEventListener('click', function(e) {
+        const sidebar = document.querySelector('.sidebar.open');
+        const menuToggle = document.querySelector('.menu-toggle');
+        
+        if (sidebar && !sidebar.contains(e.target) && (!menuToggle || !menuToggle.contains(e.target))) {
+            sidebar.classList.remove('open');
+        }
+    });
     
     try {
         const firebaseReady = initializeFirebase();
+        console.log('Firebase ready:', firebaseReady);
         
         if (firebaseReady) {
             await new Promise(resolve => setTimeout(resolve, 500));
             
             // Check license
             const licenseStatus = await checkLicense();
+            console.log('License status:', licenseStatus);
             
             if (licenseStatus === false) {
                 // Maintenance page is shown
@@ -553,16 +570,20 @@ document.addEventListener('DOMContentLoaded', async function() {
             
             if (licenseStatus === 'needs_activation') {
                 needsLicenseActivation = true;
+                console.log('License needs activation');
                 // Show login page - admin will see license activation after login
                 showLoginPage();
                 return;
             }
             
             // License is valid
+            console.log('License valid, initializing data...');
             await initializeDefaultData();
             
             // Check for existing session
             const session = getSession();
+            console.log('Existing session:', session);
+            
             if (session) {
                 if (session.type === 'admin') {
                     await showAdminDashboard();
@@ -580,18 +601,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('Initialization error:', error);
         showFirebaseError();
     }
-
-    setupEventListeners();
-    
-    // Mobile sidebar click outside to close
-    document.addEventListener('click', function(e) {
-        const sidebar = document.querySelector('.sidebar.open');
-        const menuToggle = document.querySelector('.menu-toggle');
-        
-        if (sidebar && !sidebar.contains(e.target) && (!menuToggle || !menuToggle.contains(e.target))) {
-            sidebar.classList.remove('open');
-        }
-    });
 });
 
 function showFirebaseError() {
@@ -613,14 +622,19 @@ function showFirebaseError() {
 function setupEventListeners() {
     // Login tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
+            console.log('Tab switched to:', this.dataset.tab);
         });
     });
 
     // Login form
-    document.getElementById('loginForm').addEventListener('submit', handleLogin);
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
 
     // Navigation items - Student
     document.querySelectorAll('#studentDashboard .nav-item').forEach(item => {
@@ -742,8 +756,11 @@ async function handleLogin(e) {
     
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
-    const isAdmin = document.querySelector('.tab-btn.active').dataset.tab === 'admin';
+    const activeTab = document.querySelector('.tab-btn.active');
+    const isAdmin = activeTab ? activeTab.dataset.tab === 'admin' : false;
     const errorDiv = document.getElementById('loginError');
+
+    console.log('Login attempt:', { email, isAdmin, needsLicenseActivation });
 
     errorDiv.classList.add('hidden');
 
@@ -755,8 +772,11 @@ async function handleLogin(e) {
 
     try {
         if (isAdmin) {
+            console.log('Admin login attempt');
+            
             // If license needs activation, check with default credentials first
             if (needsLicenseActivation) {
+                console.log('License needs activation, checking default credentials');
                 // Check if using default admin credentials
                 if (email === 'admin@admin.com' && password === 'admin123') {
                     // Show license activation modal
@@ -770,25 +790,39 @@ async function handleLogin(e) {
             }
             
             const admin = await getData('admin');
+            console.log('Admin data:', admin);
             
             if (!admin) {
+                console.log('No admin found, creating default');
                 await setData('admin', {
                     email: 'admin@admin.com',
                     password: 'admin123'
                 });
+                
+                // Check again with default credentials
+                if (email === 'admin@admin.com' && password === 'admin123') {
+                    saveSession({ email }, 'admin');
+                    await showAdminDashboard();
+                    return;
+                }
+                
                 errorDiv.textContent = 'Admin initialized. Try: admin@admin.com / admin123';
                 errorDiv.classList.remove('hidden');
                 return;
             }
             
             if (admin.email === email && admin.password === password) {
+                console.log('Admin credentials valid');
                 saveSession({ email }, 'admin');
-                showAdminDashboard();
+                await showAdminDashboard();
             } else {
+                console.log('Admin credentials invalid');
                 errorDiv.textContent = 'Invalid admin credentials';
                 errorDiv.classList.remove('hidden');
             }
         } else {
+            console.log('Student login attempt');
+            
             // Student login - must have valid license
             if (needsLicenseActivation) {
                 errorDiv.textContent = 'Site not activated yet. Please contact your administrator.';
@@ -797,6 +831,8 @@ async function handleLogin(e) {
             }
             
             const students = await getData('students');
+            console.log('Students data:', students ? Object.keys(students).length + ' students found' : 'No students');
+            
             if (students) {
                 const studentEntry = Object.entries(students).find(([id, s]) => 
                     s.email === email && s.password === password
@@ -804,7 +840,7 @@ async function handleLogin(e) {
                 if (studentEntry) {
                     currentStudent = { id: studentEntry[0], ...studentEntry[1] };
                     saveSession(currentStudent, 'student');
-                    showStudentDashboard();
+                    await showStudentDashboard();
                 } else {
                     errorDiv.textContent = 'Invalid email or password';
                     errorDiv.classList.remove('hidden');
