@@ -283,7 +283,7 @@
                         <i class="fas fa-users"></i> Students
                     </a>
                     <a href="#" class="nav-item" data-page="admin-notes">
-                        <i class="fas fa-file-alt"></i> Notes
+                        <i class="fas fa-sticky-note"></i> Notes
                     </a>
                     <a href="#" class="nav-item" data-page="admin-tutes">
                         <i class="fas fa-book"></i> Tutorials
@@ -904,32 +904,33 @@
                         <div class="form-group">
                             <label>Video Source *</label>
                             <div class="video-source-tabs">
-                                <button type="button" class="source-tab active" data-source="youtube" onclick="switchVideoSource('youtube')">
+                                <button type="button" class="source-tab active" id="tabYoutube" onclick="switchVideoSource('youtube')">
                                     <i class="fab fa-youtube"></i> YouTube
                                 </button>
-                                <button type="button" class="source-tab" data-source="gdrive" onclick="switchVideoSource('gdrive')">
+                                <button type="button" class="source-tab" id="tabGdrive" onclick="switchVideoSource('gdrive')">
                                     <i class="fab fa-google-drive"></i> Google Drive
                                 </button>
-                                <button type="button" class="source-tab" data-source="file" onclick="switchVideoSource('file')">
-                                    <i class="fas fa-file-video"></i> Upload
+                                <button type="button" class="source-tab" id="tabFile" onclick="switchVideoSource('file')">
+                                    <i class="fas fa-file-video"></i> Upload File
                                 </button>
                             </div>
                         </div>
-                        <div id="youtubeSourceInput" class="form-group">
-                            <label>YouTube URL</label>
-                            <input type="text" id="videoFormYouTube" placeholder="https://www.youtube.com/watch?v=...">
-                            <small class="text-muted">Paste any YouTube video link</small>
+                        <div id="youtubeSourceInput" class="form-group video-source-input">
+                            <label><i class="fab fa-youtube" style="color:#ff0000"></i> YouTube URL *</label>
+                            <input type="url" id="videoFormYouTube" placeholder="https://www.youtube.com/watch?v=xxxxx">
+                            <small class="text-muted">Paste any YouTube video URL (regular, short, or embed link)</small>
                         </div>
-                        <div id="gdriveSourceInput" class="form-group hidden">
-                            <label>Google Drive URL</label>
-                            <input type="text" id="videoFormGDrive" placeholder="https://drive.google.com/file/d/.../view">
-                            <small class="text-muted">Make sure the file is shared as "Anyone with the link can view"</small>
+                        <div id="gdriveSourceInput" class="form-group video-source-input hidden">
+                            <label><i class="fab fa-google-drive" style="color:#4285f4"></i> Google Drive URL *</label>
+                            <input type="url" id="videoFormGDrive" placeholder="https://drive.google.com/file/d/xxxxx/view">
+                            <small class="text-muted">Share file as "Anyone with the link can view" first, then paste link here</small>
                         </div>
-                        <div id="fileSourceInput" class="form-group hidden">
-                            <label>Video File (Max 50MB)</label>
+                        <div id="fileSourceInput" class="form-group video-source-input hidden">
+                            <label><i class="fas fa-file-video" style="color:#10b981"></i> Upload Video File (Max 50MB)</label>
                             <input type="file" id="videoFormFile" accept="video/*" onchange="handleVideoFileUpload(event)">
                             <input type="hidden" id="videoFormFileData">
                             <small class="file-name" id="videoFileName"></small>
+                            <small class="text-muted">Supported formats: MP4, WebM, MOV</small>
                         </div>
                         <div class="form-group">
                             <label>Thumbnail</label>

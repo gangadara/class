@@ -1150,31 +1150,82 @@ a:hover {
 .video-source-tabs {
     display: flex;
     gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
 }
 
 .source-tab {
     flex: 1;
-    padding: 0.75rem;
-    border: 1px solid var(--border-color);
+    min-width: 100px;
+    padding: 0.875rem 1rem;
+    border: 2px solid var(--border-color);
     background: var(--bg-primary);
     color: var(--text-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition: var(--transition-normal);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.source-tab i {
+    font-size: 1.1rem;
 }
 
 .source-tab:hover {
     border-color: var(--primary-color);
+    background: var(--bg-tertiary);
 }
 
 .source-tab.active {
-    background: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
     border-color: var(--primary-color);
+}
+
+/* Video Source Input Panels */
+.video-source-input {
+    padding: 1.25rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.video-source-input label {
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.video-source-input input[type="url"],
+.video-source-input input[type="text"] {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.video-source-input input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.video-source-input .text-muted {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
 }
 
 /* Thumbnail Preview */

@@ -1758,9 +1758,13 @@ function openAddVideoModal() {
 
 function switchVideoSource(source) {
     document.getElementById('videoFormSource').value = source;
-    document.querySelectorAll('.source-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.source === source);
-    });
+    
+    // Update tab active states
+    document.getElementById('tabYoutube').classList.toggle('active', source === 'youtube');
+    document.getElementById('tabGdrive').classList.toggle('active', source === 'gdrive');
+    document.getElementById('tabFile').classList.toggle('active', source === 'file');
+    
+    // Show/hide the corresponding input fields
     document.getElementById('youtubeSourceInput').classList.toggle('hidden', source !== 'youtube');
     document.getElementById('gdriveSourceInput').classList.toggle('hidden', source !== 'gdrive');
     document.getElementById('fileSourceInput').classList.toggle('hidden', source !== 'file');
