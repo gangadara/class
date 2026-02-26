@@ -19,7 +19,23 @@ const firebaseConfig = {
 // License System - Multi-Tenant Support
 // ============================================
 let currentLicenseKey = null;
-let licenseBasePath = ''; // Will be set to 'superAdmin/licenses/{KEY}/data' after activation
+let licenseBasePath = '';
+let siteId = null;
+
+// Generate unique site ID based on domain
+function generateSiteId() {
+    const domain = window.location.hostname || 'localhost';
+    const path = window.location.pathname.replace(/\/$/, '') || '';
+    const siteKey = domain + path;
+    
+    let hash = 0;
+    for (let i = 0; i < siteKey.length; i++) {
+        const char = siteKey.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return 'site_' + Math.abs(hash).toString(36);
+}
 
 // Initialize Firebase
 function initializeFirebase() {
@@ -40,17 +56,23 @@ function initializeFirebase() {
     }
 }
 
-// Check and activate license
+// Check license from Firebase (not localStorage)
 async function checkLicense() {
-    // Check if license is already saved
-    const savedLicense = localStorage.getItem('activeLicense');
+    siteId = generateSiteId();
+    console.log('Site ID:', siteId);
     
-    if (savedLicense) {
-        // Verify the license is still valid
-        try {
-            const snapshot = await db.ref(`superAdmin/licenses/${savedLicense}`).once('value');
-            if (snapshot.exists()) {
-                const license = snapshot.val();
+    try {
+        // Check if this site has a license registered in Firebase
+        const siteSnapshot = await db.ref(`sites/${siteId}`).once('value');
+        const siteData = siteSnapshot.val();
+        
+        if (siteData && siteData.licenseKey) {
+            // Site has a license, verify it
+            const licenseKey = siteData.licenseKey;
+            const licenseSnapshot = await db.ref(`superAdmin/licenses/${licenseKey}`).once('value');
+            
+            if (licenseSnapshot.exists()) {
+                const license = licenseSnapshot.val();
                 
                 // Check if license is suspended
                 if (license.status === 'suspended') {
@@ -76,114 +98,86 @@ async function checkLicense() {
                     return false;
                 }
                 
-                currentLicenseKey = savedLicense;
-                licenseBasePath = `superAdmin/licenses/${savedLicense}/data`;
+                // License is valid!
+                currentLicenseKey = licenseKey;
+                licenseBasePath = `superAdmin/licenses/${licenseKey}/data`;
                 
                 // Load restrictions
                 superAdminRestrictions = license.restrictions || superAdminRestrictions;
                 
+                // Cache in localStorage for faster subsequent loads
+                localStorage.setItem('cachedLicense', licenseKey);
+                
                 return true;
             } else {
-                // License no longer exists, clear it
-                localStorage.removeItem('activeLicense');
+                // License no longer exists, clear site registration
+                await db.ref(`sites/${siteId}`).remove();
             }
-        } catch (error) {
-            console.error('Error verifying license:', error);
         }
+        
+        // No valid license found - show login page with license activation for admin only
+        return 'needs_activation';
+        
+    } catch (error) {
+        console.error('Error checking license:', error);
+        
+        // Try cached license as fallback
+        const cachedLicense = localStorage.getItem('cachedLicense');
+        if (cachedLicense) {
+            currentLicenseKey = cachedLicense;
+            licenseBasePath = `superAdmin/licenses/${cachedLicense}/data`;
+            return true;
+        }
+        
+        return 'needs_activation';
     }
-    
-    // Show license activation screen
-    showLicenseActivation();
-    return false;
 }
 
-function showLicenseActivation() {
-    document.getElementById('loadingScreen').classList.add('hidden');
-    document.getElementById('loginPage').classList.add('hidden');
-    document.getElementById('studentDashboard').classList.add('hidden');
-    document.getElementById('adminDashboard').classList.add('hidden');
-    
-    let activationPage = document.getElementById('licenseActivationPage');
-    if (!activationPage) {
-        activationPage = document.createElement('div');
-        activationPage.id = 'licenseActivationPage';
-        activationPage.className = 'license-activation-page';
-        activationPage.innerHTML = `
-            <div class="activation-container">
-                <div class="activation-header">
-                    <i class="fas fa-key"></i>
-                    <h1>License Activation</h1>
-                    <p>Enter your license code to activate this site</p>
+// Show license activation modal (only for admin after login)
+function showLicenseActivationModal() {
+    let modal = document.getElementById('licenseActivationModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'licenseActivationModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h3><i class="fas fa-key"></i> Activate License</h3>
                 </div>
-                <form id="licenseActivationForm">
-                    <div class="form-group">
-                        <label>License Code</label>
-                        <input type="text" id="licenseCodeInput" required placeholder="LIC-XXXXXXXXXXXX" style="text-transform: uppercase;">
-                    </div>
-                    <div id="licenseError" class="error-message hidden"></div>
-                    <button type="submit" class="btn btn-primary btn-block">
-                        <i class="fas fa-check"></i> Activate License
-                    </button>
-                </form>
-                <p class="activation-note">
-                    <i class="fas fa-info-circle"></i>
-                    Contact your administrator if you don't have a license code.
-                </p>
+                <div class="modal-body">
+                    <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                        This site requires license activation. Please enter your license code.
+                    </p>
+                    <form id="licenseActivationForm">
+                        <div class="form-group">
+                            <label>License Code *</label>
+                            <input type="text" id="licenseCodeInput" required placeholder="LIC-XXXXXXXXXXXX" style="text-transform: uppercase;">
+                        </div>
+                        <div id="licenseError" class="error-message hidden"></div>
+                        <div class="form-actions" style="margin-top: 1.5rem;">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                <i class="fas fa-check"></i> Activate License
+                            </button>
+                        </div>
+                    </form>
+                    <p style="text-align: center; color: var(--text-secondary); font-size: 0.8rem; margin-top: 1rem;">
+                        <i class="fas fa-info-circle"></i> Contact your administrator if you don't have a license code.
+                    </p>
+                </div>
             </div>
         `;
-        document.body.appendChild(activationPage);
+        document.body.appendChild(modal);
         
-        // Add styles
-        const style = document.createElement('style');
-        style.textContent = `
-            .license-activation-page {
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-                padding: 1rem;
-            }
-            .activation-container {
-                background: var(--card-bg);
-                border: 1px solid var(--border-color);
-                border-radius: 1rem;
-                padding: 2.5rem;
-                width: 100%;
-                max-width: 400px;
-                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-            }
-            .activation-header {
-                text-align: center;
-                margin-bottom: 2rem;
-            }
-            .activation-header i {
-                font-size: 3rem;
-                color: var(--primary-color);
-                margin-bottom: 1rem;
-            }
-            .activation-header h1 {
-                font-size: 1.75rem;
-                margin-bottom: 0.5rem;
-                color: var(--text-primary);
-            }
-            .activation-header p {
-                color: var(--text-secondary);
-            }
-            .activation-note {
-                text-align: center;
-                color: var(--text-secondary);
-                font-size: 0.8rem;
-                margin-top: 1.5rem;
-            }
-        `;
-        document.head.appendChild(style);
-        
-        // Add form handler
         document.getElementById('licenseActivationForm').addEventListener('submit', activateLicense);
     }
     
-    activationPage.classList.remove('hidden');
+    modal.classList.remove('hidden');
+}
+
+function closeLicenseActivationModal() {
+    const modal = document.getElementById('licenseActivationModal');
+    if (modal) modal.classList.add('hidden');
 }
 
 async function activateLicense(e) {
@@ -219,11 +213,30 @@ async function activateLicense(e) {
             return;
         }
         
-        // Save license and reload
-        localStorage.setItem('activeLicense', licenseCode);
-        location.reload();
+        // Register this site with the license in Firebase
+        await db.ref(`sites/${siteId}`).set({
+            licenseKey: licenseCode,
+            domain: window.location.hostname,
+            activatedAt: Date.now()
+        });
+        
+        // Set current license
+        currentLicenseKey = licenseCode;
+        licenseBasePath = `superAdmin/licenses/${licenseCode}/data`;
+        
+        // Cache locally
+        localStorage.setItem('cachedLicense', licenseCode);
+        
+        // Close modal and reload
+        closeLicenseActivationModal();
+        showToast('License activated successfully!');
+        
+        // Initialize default data and show admin dashboard
+        await initializeDefaultData();
+        await showAdminDashboard();
         
     } catch (error) {
+        console.error('License activation error:', error);
         errorDiv.textContent = 'Error activating license. Please try again.';
         errorDiv.classList.remove('hidden');
     }
@@ -274,7 +287,6 @@ async function initializeDefaultData() {
 // Database Operations (with license path support)
 // ============================================
 function getFullPath(path) {
-    // If license system is active, prefix with license path
     if (licenseBasePath && !path.startsWith('superAdmin')) {
         return `${licenseBasePath}/${path}`;
     }
@@ -457,7 +469,6 @@ function showMaintenancePage(title, message) {
     document.getElementById('studentDashboard').classList.add('hidden');
     document.getElementById('adminDashboard').classList.add('hidden');
     
-    // Create maintenance page if not exists
     let maintenancePage = document.getElementById('maintenancePage');
     if (!maintenancePage) {
         maintenancePage = document.createElement('div');
@@ -481,7 +492,7 @@ function applyFeatureRestrictions(userType) {
     if (userType === 'student') {
         const features = superAdminRestrictions.studentFeatures || {};
         
-        // Hide/show sidebar items based on restrictions
+        // Hide/show sidebar items
         const notesNav = document.querySelector('#studentDashboard .nav-item[data-page="notes"]');
         const tutesNav = document.querySelector('#studentDashboard .nav-item[data-page="tutorials"]');
         const videosNav = document.querySelector('#studentDashboard .nav-item[data-page="videos"]');
@@ -502,7 +513,6 @@ function applyFeatureRestrictions(userType) {
     } else if (userType === 'admin') {
         const features = superAdminRestrictions.adminFeatures || {};
         
-        // Hide/show admin sidebar items based on restrictions
         const notesNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-notes"]');
         const tutesNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-tutes"]');
         const videosNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-videos"]');
@@ -522,25 +532,33 @@ function applyFeatureRestrictions(userType) {
 // ============================================
 // App Initialization
 // ============================================
+let needsLicenseActivation = false;
+
 document.addEventListener('DOMContentLoaded', async function() {
     initTheme();
     
     try {
-        // Initialize Firebase
         const firebaseReady = initializeFirebase();
         
         if (firebaseReady) {
-            // Wait for Firebase to be ready
             await new Promise(resolve => setTimeout(resolve, 500));
             
-            // CRITICAL: Check license first
-            // This ensures teacher's site only works with valid license
-            const licenseValid = await checkLicense();
-            if (!licenseValid) {
-                return; // License activation screen or maintenance page shown
+            // Check license
+            const licenseStatus = await checkLicense();
+            
+            if (licenseStatus === false) {
+                // Maintenance page is shown
+                return;
             }
             
-            // Ensure default data exists
+            if (licenseStatus === 'needs_activation') {
+                needsLicenseActivation = true;
+                // Show login page - admin will see license activation after login
+                showLoginPage();
+                return;
+            }
+            
+            // License is valid
             await initializeDefaultData();
             
             // Check for existing session
@@ -563,7 +581,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         showFirebaseError();
     }
 
-    // Setup event listeners
     setupEventListeners();
     
     // Mobile sidebar click outside to close
@@ -571,7 +588,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         const sidebar = document.querySelector('.sidebar.open');
         const menuToggle = document.querySelector('.menu-toggle');
         
-        if (sidebar && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+        if (sidebar && !sidebar.contains(e.target) && (!menuToggle || !menuToggle.contains(e.target))) {
             sidebar.classList.remove('open');
         }
     });
@@ -663,7 +680,6 @@ async function showStudentDashboard() {
     await loadBranding();
     await loadStudentDashboard();
     
-    // Apply feature restrictions
     applyFeatureRestrictions('student');
 }
 
@@ -674,11 +690,8 @@ async function showAdminDashboard() {
     document.getElementById('adminDashboard').classList.remove('hidden');
     
     await loadAdminOverview();
-    
-    // Load super admin notices for teacher
     await loadSuperAdminNotices();
     
-    // Apply feature restrictions
     applyFeatureRestrictions('admin');
 }
 
@@ -689,7 +702,6 @@ function showPage(pageName) {
     document.querySelectorAll('#studentDashboard .page').forEach(p => p.classList.add('hidden'));
     document.getElementById(pageName + 'Page').classList.remove('hidden');
 
-    // Load content based on page
     if (pageName === 'dashboard') loadStudentDashboard();
     if (pageName === 'notes') loadNotes();
     if (pageName === 'tutorials') loadTutes();
@@ -704,7 +716,6 @@ function showAdminPage(pageName) {
     document.querySelectorAll('#adminDashboard .page').forEach(p => p.classList.add('hidden'));
     document.getElementById(pageName + 'Page').classList.remove('hidden');
 
-    // Load content based on page
     if (pageName === 'admin-overview') loadAdminOverview();
     if (pageName === 'admin-branding') loadBrandingForm();
     if (pageName === 'admin-notices') loadAdminNotices();
@@ -744,12 +755,24 @@ async function handleLogin(e) {
 
     try {
         if (isAdmin) {
+            // If license needs activation, check with default credentials first
+            if (needsLicenseActivation) {
+                // Check if using default admin credentials
+                if (email === 'admin@admin.com' && password === 'admin123') {
+                    // Show license activation modal
+                    showLicenseActivationModal();
+                    return;
+                } else {
+                    errorDiv.textContent = 'Please use default admin credentials (admin@admin.com / admin123) to activate license.';
+                    errorDiv.classList.remove('hidden');
+                    return;
+                }
+            }
+            
             const admin = await getData('admin');
-            console.log('Admin data:', admin);
             
             if (!admin) {
-                // Try to create default admin
-                await db.ref('admin').set({
+                await setData('admin', {
                     email: 'admin@admin.com',
                     password: 'admin123'
                 });
@@ -766,6 +789,13 @@ async function handleLogin(e) {
                 errorDiv.classList.remove('hidden');
             }
         } else {
+            // Student login - must have valid license
+            if (needsLicenseActivation) {
+                errorDiv.textContent = 'Site not activated yet. Please contact your administrator.';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
             const students = await getData('students');
             if (students) {
                 const studentEntry = Object.entries(students).find(([id, s]) => 
@@ -795,19 +825,15 @@ function logout() {
     clearSession();
     currentStudent = null;
     
-    // Hide all screens
     document.getElementById('loadingScreen').classList.add('hidden');
     document.getElementById('studentDashboard').classList.add('hidden');
     document.getElementById('adminDashboard').classList.add('hidden');
     
-    // Show login page
     document.getElementById('loginPage').classList.remove('hidden');
     
-    // Reset login form
     document.getElementById('loginForm').reset();
     document.getElementById('loginError').classList.add('hidden');
     
-    // Load branding for login page
     loadBrandingForLogin();
 }
 
@@ -825,7 +851,6 @@ async function loadBrandingForLogin() {
             document.getElementById('loginLogo').innerHTML = `<img src="${branding.logo}" alt="Logo">`;
         }
 
-        // Apply colors
         if (branding.primaryColor) {
             document.documentElement.style.setProperty('--primary-color', branding.primaryColor);
         }
@@ -844,7 +869,6 @@ async function loadBranding() {
             document.getElementById('studentLogo').innerHTML = `<img src="${branding.logo}" alt="Logo">`;
         }
 
-        // Apply colors
         if (branding.primaryColor) {
             document.documentElement.style.setProperty('--primary-color', branding.primaryColor);
         }
@@ -892,7 +916,6 @@ async function saveBranding() {
         footer: document.getElementById('brandFooter').value
     };
 
-    // Get existing logo
     const existing = await getData('branding');
     if (existing && existing.logo) {
         branding.logo = existing.logo;
@@ -900,7 +923,6 @@ async function saveBranding() {
 
     await setData('branding', branding);
     
-    // Apply colors immediately
     document.documentElement.style.setProperty('--primary-color', branding.primaryColor);
     document.documentElement.style.setProperty('--secondary-color', branding.secondaryColor);
     
@@ -915,7 +937,6 @@ function handleLogoUpload(event) {
             const logoData = e.target.result;
             document.getElementById('logoPreview').innerHTML = `<img src="${logoData}" alt="Logo">`;
             
-            // Save logo to branding
             const branding = await getData('branding') || {};
             branding.logo = logoData;
             await setData('branding', branding);
@@ -953,7 +974,6 @@ async function loadStudentDashboard() {
     badge.textContent = isPaid ? 'Paid' : 'Free';
     badge.className = 'badge ' + (isPaid ? 'badge-success' : 'badge-warning');
 
-    // Load stats
     const notes = await getData('notes') || {};
     const tutes = await getData('tutes') || {};
     const videos = await getData('videos') || {};
@@ -966,10 +986,7 @@ async function loadStudentDashboard() {
     document.getElementById('statTutes').textContent = accessibleTutes;
     document.getElementById('statVideos').textContent = accessibleVideos;
 
-    // Load notices
     await loadStudentNotices();
-    
-    // Load teacher info bar
     await loadTeacherInfoBar();
 }
 
@@ -984,7 +1001,6 @@ async function loadTeacherInfoBar() {
     
     infoBar.classList.remove('hidden');
     
-    // Build contact icons
     let contactIcons = '';
     
     if (branding.email) {
@@ -1023,10 +1039,8 @@ async function loadTeacherInfoBar() {
 async function loadStudentNotices() {
     const notices = await getData('notices') || {};
     
-    // Get super admin notice restrictions
     const noticeRestrictions = superAdminRestrictions.noticeRestrictions || {};
     
-    // Filter active notices AND check super admin restrictions
     const activeNotices = Object.entries(notices)
         .filter(([id, n]) => {
             const isActive = n.active === true || n.active === 'true';
@@ -1046,18 +1060,15 @@ async function loadStudentNotices() {
 
     noticesSection.classList.remove('hidden');
 
-    // Separate banners and text notices
     const banners = activeNotices.filter(n => n.type === 'banner');
     const textNotices = activeNotices.filter(n => n.type === 'text');
 
-    // Render banners
     bannersContainer.innerHTML = banners.map(b => `
         <div class="banner-item" ${b.link ? `onclick="window.open('${b.link}', '_blank')"` : ''}>
             <img src="${b.image}" alt="Banner">
         </div>
     `).join('');
 
-    // Render text notices
     noticesContainer.innerHTML = textNotices.map(n => `
         <div class="notice-item ${n.priority || 'normal'}">
             <i class="fas ${n.priority === 'urgent' ? 'fa-exclamation-circle' : n.priority === 'important' ? 'fa-exclamation-triangle' : 'fa-info-circle'}"></i>
@@ -1092,7 +1103,6 @@ async function loadNotes() {
     const notes = await getData('notes') || {};
     const isPaid = currentStudent && currentStudent.status === 'paid';
 
-    // Populate month filter
     const months = [...new Set(Object.values(notes).map(n => n.month).filter(Boolean))].sort().reverse();
     const monthFilter = document.getElementById('notesMonthFilter');
     monthFilter.innerHTML = '<option value="all">All Months</option>' + 
@@ -1104,6 +1114,7 @@ async function loadNotes() {
 function filterNotes() {
     const accessFilter = document.getElementById('notesAccessFilter').value;
     const monthFilter = document.getElementById('notesMonthFilter').value;
+    const sortFilter = document.getElementById('notesSortFilter')?.value || 'newest';
     
     showContentLoading('notesList');
     
@@ -1111,7 +1122,6 @@ function filterNotes() {
         const isPaid = currentStudent && currentStudent.status === 'paid';
         let notesList = Object.entries(notes || {}).map(([id, n]) => ({ id, ...n }));
 
-        // Apply filters
         if (accessFilter !== 'all') {
             notesList = notesList.filter(n => n.access === accessFilter);
         }
@@ -1119,11 +1129,11 @@ function filterNotes() {
             notesList = notesList.filter(n => n.month === monthFilter);
         }
 
-        // Sort by newest first (createdAt timestamp or by ID which is chronological in Firebase)
+        // Sort by month (most recent first by default)
         notesList.sort((a, b) => {
-            const dateA = a.createdAt || 0;
-            const dateB = b.createdAt || 0;
-            return dateB - dateA;
+            const monthA = a.month || '0000-00';
+            const monthB = b.month || '0000-00';
+            return sortFilter === 'newest' ? monthB.localeCompare(monthA) : monthA.localeCompare(monthB);
         });
 
         renderNotes(notesList, isPaid);
@@ -1184,7 +1194,7 @@ function renderNotes(notes, isPaid) {
 }
 
 // ============================================
-// Tutorials
+// Tutes
 // ============================================
 async function loadTutes() {
     showContentLoading('tutesList');
@@ -1192,7 +1202,6 @@ async function loadTutes() {
     const tutes = await getData('tutes') || {};
     const isPaid = currentStudent && currentStudent.status === 'paid';
 
-    // Populate month filter
     const months = [...new Set(Object.values(tutes).map(t => t.month).filter(Boolean))].sort().reverse();
     const monthFilter = document.getElementById('tutesMonthFilter');
     monthFilter.innerHTML = '<option value="all">All Months</option>' + 
@@ -1205,6 +1214,7 @@ function filterTutes() {
     const typeFilter = document.getElementById('tutesTypeFilter').value;
     const accessFilter = document.getElementById('tutesAccessFilter').value;
     const monthFilter = document.getElementById('tutesMonthFilter').value;
+    const sortFilter = document.getElementById('tutesSortFilter')?.value || 'newest';
     
     showContentLoading('tutesList');
     
@@ -1212,7 +1222,6 @@ function filterTutes() {
         const isPaid = currentStudent && currentStudent.status === 'paid';
         let tutesList = Object.entries(tutes || {}).map(([id, t]) => ({ id, ...t }));
 
-        // Apply filters
         if (typeFilter !== 'all') {
             tutesList = tutesList.filter(t => t.type === typeFilter);
         }
@@ -1223,11 +1232,11 @@ function filterTutes() {
             tutesList = tutesList.filter(t => t.month === monthFilter);
         }
 
-        // Sort by newest first
+        // Sort by month
         tutesList.sort((a, b) => {
-            const dateA = a.createdAt || 0;
-            const dateB = b.createdAt || 0;
-            return dateB - dateA;
+            const monthA = a.month || '0000-00';
+            const monthB = b.month || '0000-00';
+            return sortFilter === 'newest' ? monthB.localeCompare(monthA) : monthA.localeCompare(monthB);
         });
 
         renderTutes(tutesList, isPaid);
@@ -1299,7 +1308,6 @@ async function loadVideos() {
     const videos = await getData('videos') || {};
     const isPaid = currentStudent && currentStudent.status === 'paid';
 
-    // Populate month filter
     const months = [...new Set(Object.values(videos).map(v => v.month).filter(Boolean))].sort().reverse();
     const monthFilter = document.getElementById('videosMonthFilter');
     monthFilter.innerHTML = '<option value="all">All Months</option>' + 
@@ -1311,6 +1319,7 @@ async function loadVideos() {
 function filterVideos() {
     const accessFilter = document.getElementById('videosAccessFilter').value;
     const monthFilter = document.getElementById('videosMonthFilter').value;
+    const sortFilter = document.getElementById('videosSortFilter')?.value || 'newest';
     
     showContentLoading('videosList');
     
@@ -1318,7 +1327,6 @@ function filterVideos() {
         const isPaid = currentStudent && currentStudent.status === 'paid';
         let videosList = Object.entries(videos || {}).map(([id, v]) => ({ id, ...v }));
 
-        // Apply filters
         if (accessFilter !== 'all') {
             videosList = videosList.filter(v => v.access === accessFilter);
         }
@@ -1326,11 +1334,11 @@ function filterVideos() {
             videosList = videosList.filter(v => v.month === monthFilter);
         }
 
-        // Sort by newest first
+        // Sort by month
         videosList.sort((a, b) => {
-            const dateA = a.createdAt || 0;
-            const dateB = b.createdAt || 0;
-            return dateB - dateA;
+            const monthA = a.month || '0000-00';
+            const monthB = b.month || '0000-00';
+            return sortFilter === 'newest' ? monthB.localeCompare(monthA) : monthA.localeCompare(monthB);
         });
 
         renderVideos(videosList, isPaid);
@@ -1405,7 +1413,6 @@ function extractYouTubeId(url) {
 
 function extractGoogleDriveId(url) {
     if (!url) return null;
-    // Match various Google Drive URL formats
     const patterns = [
         /\/file\/d\/([a-zA-Z0-9_-]+)/,
         /id=([a-zA-Z0-9_-]+)/,
@@ -1429,7 +1436,6 @@ async function playVideo(videoId) {
 
     title.textContent = video.title;
 
-    // Get branding for watermark
     const branding = await getData('branding');
     watermark.textContent = branding?.siteName || 'Media Studies A/L';
 
@@ -1449,7 +1455,6 @@ async function playVideo(videoId) {
     } else if (video.source === 'gdrive' && video.gdrive) {
         const driveId = extractGoogleDriveId(video.gdrive);
         if (driveId) {
-            // Google Drive with blocker overlay to hide "Open in new window" button
             container.innerHTML = `
                 <div class="gdrive-top-bar"></div>
                 <div class="gdrive-blocker"><i class="fas fa-shield-alt"></i></div>
@@ -1474,8 +1479,6 @@ async function playVideo(videoId) {
     }
 
     modal.classList.remove('hidden');
-
-    // Prevent right-click on video
     container.addEventListener('contextmenu', e => e.preventDefault());
 }
 
@@ -1511,18 +1514,15 @@ async function viewPdf(id, type) {
 
     title.textContent = item.title;
 
-    // Get branding for watermark
     const branding = await getData('branding');
     const watermarkText = branding?.siteName || 'Media Studies A/L';
 
     if (currentPdfDownloadable) {
-        // If downloadable, show regular PDF viewer
         viewerContainer.innerHTML = `
             <iframe id="pdfViewer" src="${item.file}" style="width: 100%; height: 100%; border: none;"></iframe>
         `;
         downloadBtn.classList.remove('hidden');
     } else {
-        // If not downloadable, show protected viewer with blocked controls
         viewerContainer.innerHTML = `
             <div class="pdf-protected-viewer">
                 <div class="pdf-watermark">${watermarkText}</div>
@@ -1537,8 +1537,6 @@ async function viewPdf(id, type) {
     }
 
     modal.classList.remove('hidden');
-
-    // Prevent right-click on PDF viewer
     viewerContainer.addEventListener('contextmenu', e => e.preventDefault());
 }
 
@@ -1670,7 +1668,6 @@ async function handleBackupFile(event) {
             return;
         }
         
-        // Restore all data
         if (data.admin) await setData('admin', data.admin);
         if (data.branding) await setData('branding', data.branding);
         if (data.students) await setData('students', data.students);
@@ -1689,13 +1686,12 @@ async function handleBackupFile(event) {
         showToast('Failed to import backup. Invalid file format.', true);
     }
     
-    // Reset file input
     event.target.value = '';
 }
 
 async function resetAllData() {
     if (confirm('Are you sure you want to reset ALL data? This cannot be undone!')) {
-        if (confirm('This will delete all students, notes, tutorials, videos, and notices. Continue?')) {
+        if (confirm('This will delete all students, notes, tutes, videos, and notices. Continue?')) {
             await deleteData('students');
             await deleteData('notes');
             await deleteData('tutes');
@@ -1913,7 +1909,6 @@ async function handleStudentSubmit(e) {
     if (password) {
         student.password = password;
     } else if (id) {
-        // Keep existing password
         const existing = await getData(`students/${id}`);
         if (existing) {
             student.password = existing.password;
@@ -2042,7 +2037,6 @@ async function handleNoteSubmit(e) {
     }
 
     if (id) {
-        // Keep original createdAt
         const existing = await getData(`notes/${id}`);
         if (existing && existing.createdAt) {
             note.createdAt = existing.createdAt;
@@ -2071,7 +2065,7 @@ function closeNoteModal() {
 }
 
 // ============================================
-// Admin - Tutorials
+// Admin - Tutes
 // ============================================
 async function loadAdminTutes() {
     const tutes = await getData('tutes') || {};
@@ -2172,7 +2166,6 @@ async function handleTuteSubmit(e) {
     }
 
     if (id) {
-        // Keep original createdAt
         const existing = await getData(`tutes/${id}`);
         if (existing && existing.createdAt) {
             tute.createdAt = existing.createdAt;
@@ -2189,7 +2182,7 @@ async function handleTuteSubmit(e) {
 }
 
 async function deleteTute(id) {
-    if (confirm('Are you sure you want to delete this tutorial?')) {
+    if (confirm('Are you sure you want to delete this tute?')) {
         await deleteData(`tutes/${id}`);
         loadAdminTutes();
         showToast('Tute deleted');
@@ -2249,12 +2242,10 @@ function openAddVideoModal() {
 function switchVideoSource(source) {
     document.getElementById('videoFormSource').value = source;
     
-    // Update tab active states
     document.getElementById('tabYoutube').classList.toggle('active', source === 'youtube');
     document.getElementById('tabGdrive').classList.toggle('active', source === 'gdrive');
     document.getElementById('tabFile').classList.toggle('active', source === 'file');
     
-    // Show/hide the corresponding input fields
     document.getElementById('youtubeSourceInput').classList.toggle('hidden', source !== 'youtube');
     document.getElementById('gdriveSourceInput').classList.toggle('hidden', source !== 'gdrive');
     document.getElementById('fileSourceInput').classList.toggle('hidden', source !== 'file');
@@ -2380,7 +2371,6 @@ async function handleVideoSubmit(e) {
     }
 
     if (id) {
-        // Keep original createdAt
         const existing = await getData(`videos/${id}`);
         if (existing && existing.createdAt) {
             video.createdAt = existing.createdAt;
@@ -2435,11 +2425,11 @@ function showToast(message, isError = false) {
 
 // Keyboard shortcut prevention for protected content
 document.addEventListener('keydown', function(e) {
-    // Check if video modal is open
     const videoModal = document.getElementById('videoModal');
-    if (!videoModal.classList.contains('hidden')) {
-        // Prevent Ctrl+S, Ctrl+U, F12
-        if ((e.ctrlKey && (e.key === 's' || e.key === 'u')) || e.key === 'F12') {
+    const pdfModal = document.getElementById('pdfModal');
+    
+    if ((!videoModal.classList.contains('hidden') || !pdfModal.classList.contains('hidden'))) {
+        if ((e.ctrlKey && (e.key === 's' || e.key === 'u' || e.key === 'p')) || e.key === 'F12') {
             e.preventDefault();
             return false;
         }
