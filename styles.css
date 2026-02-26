@@ -1922,3 +1922,47 @@ a:hover {
         margin-left: 0;
     }
 }
+
+/* ============================================
+   Maintenance Page
+   ============================================ */
+.maintenance-page {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 2rem;
+}
+
+.maintenance-content {
+    text-align: center;
+    max-width: 500px;
+}
+
+.maintenance-content i {
+    font-size: 5rem;
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+    display: block;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.maintenance-content h1 {
+    font-size: 2rem;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+}
+
+.maintenance-content p {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}

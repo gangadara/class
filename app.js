@@ -178,6 +178,96 @@ function updateThemeIcons() {
 }
 
 // ============================================
+// Super Admin Restrictions
+// ============================================
+let superAdminRestrictions = {
+    siteEnabled: true,
+    maintenanceMessage: 'Site is under maintenance. Please try again later.',
+    studentFeatures: { notes: true, tutes: true, videos: true },
+    adminFeatures: { notes: true, tutes: true, videos: true, students: true, notices: true, branding: true }
+};
+
+async function loadSuperAdminRestrictions() {
+    try {
+        const restrictions = await getData('superAdmin/restrictions');
+        if (restrictions) {
+            superAdminRestrictions = restrictions;
+        }
+        return superAdminRestrictions;
+    } catch (error) {
+        console.error('Error loading restrictions:', error);
+        return superAdminRestrictions;
+    }
+}
+
+function showMaintenancePage(message) {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('studentDashboard').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.add('hidden');
+    
+    // Create maintenance page if not exists
+    let maintenancePage = document.getElementById('maintenancePage');
+    if (!maintenancePage) {
+        maintenancePage = document.createElement('div');
+        maintenancePage.id = 'maintenancePage';
+        maintenancePage.className = 'maintenance-page';
+        document.body.appendChild(maintenancePage);
+    }
+    
+    maintenancePage.innerHTML = `
+        <div class="maintenance-content">
+            <i class="fas fa-tools"></i>
+            <h1>Site Under Maintenance</h1>
+            <p>${message || 'We are currently performing maintenance. Please check back later.'}</p>
+        </div>
+    `;
+    maintenancePage.classList.remove('hidden');
+}
+
+function applyFeatureRestrictions(userType) {
+    if (userType === 'student') {
+        const features = superAdminRestrictions.studentFeatures || {};
+        
+        // Hide/show sidebar items based on restrictions
+        const notesNav = document.querySelector('#studentDashboard .nav-item[data-page="notes"]');
+        const tutesNav = document.querySelector('#studentDashboard .nav-item[data-page="tutorials"]');
+        const videosNav = document.querySelector('#studentDashboard .nav-item[data-page="videos"]');
+        
+        if (notesNav) notesNav.style.display = features.notes === false ? 'none' : '';
+        if (tutesNav) tutesNav.style.display = features.tutes === false ? 'none' : '';
+        if (videosNav) videosNav.style.display = features.videos === false ? 'none' : '';
+        
+        // Hide quick action buttons
+        const quickNotes = document.querySelector('.quick-action[onclick*="notes"]');
+        const quickTutes = document.querySelector('.quick-action[onclick*="tutorials"]');
+        const quickVideos = document.querySelector('.quick-action[onclick*="videos"]');
+        
+        if (quickNotes) quickNotes.style.display = features.notes === false ? 'none' : '';
+        if (quickTutes) quickTutes.style.display = features.tutes === false ? 'none' : '';
+        if (quickVideos) quickVideos.style.display = features.videos === false ? 'none' : '';
+        
+    } else if (userType === 'admin') {
+        const features = superAdminRestrictions.adminFeatures || {};
+        
+        // Hide/show admin sidebar items based on restrictions
+        const notesNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-notes"]');
+        const tutesNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-tutes"]');
+        const videosNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-videos"]');
+        const studentsNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-students"]');
+        const noticesNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-notices"]');
+        const brandingNav = document.querySelector('#adminDashboard .nav-item[data-page="admin-branding"]');
+        
+        if (notesNav) notesNav.style.display = features.notes === false ? 'none' : '';
+        if (tutesNav) tutesNav.style.display = features.tutes === false ? 'none' : '';
+        if (videosNav) videosNav.style.display = features.videos === false ? 'none' : '';
+        if (studentsNav) studentsNav.style.display = features.students === false ? 'none' : '';
+        if (noticesNav) noticesNav.style.display = features.notices === false ? 'none' : '';
+        if (brandingNav) brandingNav.style.display = features.branding === false ? 'none' : '';
+    }
+}
+
+// ============================================
 // App Initialization
 // ============================================
 document.addEventListener('DOMContentLoaded', async function() {
@@ -193,6 +283,15 @@ document.addEventListener('DOMContentLoaded', async function() {
             
             // Ensure default data exists
             await initializeDefaultData();
+            
+            // Load super admin restrictions
+            await loadSuperAdminRestrictions();
+            
+            // Check if site is disabled
+            if (superAdminRestrictions.siteEnabled === false) {
+                showMaintenancePage(superAdminRestrictions.maintenanceMessage);
+                return;
+            }
             
             // Check for existing session
             const session = getSession();
@@ -217,6 +316,16 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Setup event listeners
     setupEventListeners();
+    
+    // Mobile sidebar click outside to close
+    document.addEventListener('click', function(e) {
+        const sidebar = document.querySelector('.sidebar.open');
+        const menuToggle = document.querySelector('.menu-toggle');
+        
+        if (sidebar && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+            sidebar.classList.remove('open');
+        }
+    });
 });
 
 function showFirebaseError() {
@@ -304,6 +413,9 @@ async function showStudentDashboard() {
     
     await loadBranding();
     await loadStudentDashboard();
+    
+    // Apply feature restrictions
+    applyFeatureRestrictions('student');
 }
 
 async function showAdminDashboard() {
@@ -313,6 +425,9 @@ async function showAdminDashboard() {
     document.getElementById('adminDashboard').classList.remove('hidden');
     
     await loadAdminOverview();
+    
+    // Apply feature restrictions
+    applyFeatureRestrictions('admin');
 }
 
 function showPage(pageName) {

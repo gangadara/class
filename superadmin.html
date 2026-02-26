@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Control Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="superadmin.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="superLoginScreen" class="super-login-screen">
+        <div class="super-login-box">
+            <div class="super-login-header">
+                <i class="fas fa-shield-alt"></i>
+                <h1>System Control</h1>
+                <p>Developer Access Only</p>
+            </div>
+            <form id="superLoginForm">
+                <div class="form-group">
+                    <label>Access Key</label>
+                    <input type="password" id="superAccessKey" placeholder="Enter access key" required>
+                </div>
+                <div class="form-group">
+                    <label>Security Code</label>
+                    <input type="password" id="superSecurityCode" placeholder="Enter security code" required>
+                </div>
+                <button type="submit" class="super-login-btn">
+                    <i class="fas fa-lock-open"></i> Access Panel
+                </button>
+            </form>
+            <div id="superLoginError" class="super-login-error hidden"></div>
+        </div>
+    </div>
+
+    <!-- Super Admin Dashboard -->
+    <div id="superDashboard" class="super-dashboard hidden">
+        <!-- Header -->
+        <header class="super-header">
+            <div class="super-header-left">
+                <i class="fas fa-shield-alt"></i>
+                <span>System Control Panel</span>
+            </div>
+            <div class="super-header-right">
+                <span id="superLastLogin"></span>
+                <button id="superLogoutBtn" class="super-logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="super-main">
+            <!-- Site Status Card -->
+            <div class="super-card site-status-card">
+                <div class="super-card-header">
+                    <h2><i class="fas fa-power-off"></i> Site Control</h2>
+                </div>
+                <div class="super-card-body">
+                    <div class="status-toggle">
+                        <div class="status-info">
+                            <h3>Site Status</h3>
+                            <p id="siteStatusText">Site is currently ONLINE</p>
+                        </div>
+                        <label class="super-switch">
+                            <input type="checkbox" id="siteEnabledToggle" checked>
+                            <span class="super-slider"></span>
+                        </label>
+                    </div>
+                    <div class="maintenance-message">
+                        <label>Maintenance Message (shown when site is disabled)</label>
+                        <textarea id="maintenanceMessage" rows="3" placeholder="Site is under maintenance. Please try again later."></textarea>
+                    </div>
+                    <button id="saveSiteStatus" class="super-btn super-btn-primary">
+                        <i class="fas fa-save"></i> Save Site Status
+                    </button>
+                </div>
+            </div>
+
+            <!-- Student Features Card -->
+            <div class="super-card">
+                <div class="super-card-header">
+                    <h2><i class="fas fa-user-graduate"></i> Student Features</h2>
+                </div>
+                <div class="super-card-body">
+                    <p class="card-description">Control what students can see and access</p>
+                    <div class="feature-toggles">
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-sticky-note"></i>
+                                <span>Notes Section</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="studentNotesToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-book"></i>
+                                <span>Tutes Section</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="studentTutesToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-video"></i>
+                                <span>Videos Section</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="studentVideosToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <button id="saveStudentFeatures" class="super-btn super-btn-primary">
+                        <i class="fas fa-save"></i> Save Student Features
+                    </button>
+                </div>
+            </div>
+
+            <!-- Teacher Admin Features Card -->
+            <div class="super-card">
+                <div class="super-card-header">
+                    <h2><i class="fas fa-chalkboard-teacher"></i> Teacher Admin Features</h2>
+                </div>
+                <div class="super-card-body">
+                    <p class="card-description">Control what teacher can manage in admin panel</p>
+                    <div class="feature-toggles">
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-sticky-note"></i>
+                                <span>Notes Management</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="adminNotesToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-book"></i>
+                                <span>Tutes Management</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="adminTutesToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-video"></i>
+                                <span>Videos Management</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="adminVideosToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-users"></i>
+                                <span>Students Management</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="adminStudentsToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-bell"></i>
+                                <span>Notices Management</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="adminNoticesToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                        <div class="feature-toggle">
+                            <div class="feature-info">
+                                <i class="fas fa-palette"></i>
+                                <span>Branding Settings</span>
+                            </div>
+                            <label class="super-switch">
+                                <input type="checkbox" id="adminBrandingToggle" checked>
+                                <span class="super-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <button id="saveAdminFeatures" class="super-btn super-btn-primary">
+                        <i class="fas fa-save"></i> Save Admin Features
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistics Card -->
+            <div class="super-card">
+                <div class="super-card-header">
+                    <h2><i class="fas fa-chart-bar"></i> Site Statistics</h2>
+                </div>
+                <div class="super-card-body">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <i class="fas fa-users"></i>
+                            <div class="stat-value" id="statStudents">0</div>
+                            <div class="stat-label">Students</div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-user-check"></i>
+                            <div class="stat-value" id="statPaidStudents">0</div>
+                            <div class="stat-label">Paid Students</div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-sticky-note"></i>
+                            <div class="stat-value" id="statNotes">0</div>
+                            <div class="stat-label">Notes</div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-book"></i>
+                            <div class="stat-value" id="statTutes">0</div>
+                            <div class="stat-label">Tutes</div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-video"></i>
+                            <div class="stat-value" id="statVideos">0</div>
+                            <div class="stat-label">Videos</div>
+                        </div>
+                        <div class="stat-box">
+                            <i class="fas fa-bell"></i>
+                            <div class="stat-value" id="statNotices">0</div>
+                            <div class="stat-label">Notices</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Management Card -->
+            <div class="super-card">
+                <div class="super-card-header">
+                    <h2><i class="fas fa-database"></i> Data Management</h2>
+                </div>
+                <div class="super-card-body">
+                    <div class="data-actions">
+                        <button id="exportAllData" class="super-btn super-btn-success">
+                            <i class="fas fa-download"></i> Export All Data
+                        </button>
+                        <label class="super-btn super-btn-warning">
+                            <i class="fas fa-upload"></i> Import Data
+                            <input type="file" id="importDataFile" accept=".json" hidden>
+                        </label>
+                        <button id="resetAllData" class="super-btn super-btn-danger">
+                            <i class="fas fa-trash"></i> Reset All Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Credentials Card -->
+            <div class="super-card">
+                <div class="super-card-header">
+                    <h2><i class="fas fa-key"></i> Change Access Credentials</h2>
+                </div>
+                <div class="super-card-body">
+                    <form id="changeCredentialsForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Current Access Key</label>
+                                <input type="password" id="currentKey" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Current Security Code</label>
+                                <input type="password" id="currentCode" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>New Access Key</label>
+                                <input type="password" id="newKey" required minlength="8">
+                            </div>
+                            <div class="form-group">
+                                <label>New Security Code</label>
+                                <input type="password" id="newCode" required minlength="8">
+                            </div>
+                        </div>
+                        <button type="submit" class="super-btn super-btn-primary">
+                            <i class="fas fa-save"></i> Update Credentials
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="super-footer">
+            <p>System Control Panel &copy; 2024 | Developer Access Only</p>
+        </footer>
+    </div>
+
+    <!-- Toast -->
+    <div id="superToast" class="super-toast hidden"></div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="superadmin.js"></script>
+</body>
+</html>
