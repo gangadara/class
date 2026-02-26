@@ -1926,6 +1926,78 @@ a:hover {
 /* ============================================
    Maintenance Page
    ============================================ */
+/* Super Admin Notices for Teacher */
+.super-admin-notices-container {
+    margin-bottom: 1.5rem;
+}
+
+.super-admin-notice {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border-left: 4px solid var(--primary-color);
+    border: 1px solid var(--border-color);
+}
+
+.super-admin-notice.normal {
+    border-left: 4px solid #6366f1;
+}
+
+.super-admin-notice.warning {
+    border-left: 4px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.super-admin-notice.critical {
+    border-left: 4px solid #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.super-admin-notice .notice-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.super-admin-notice .notice-header i {
+    font-size: 1.2rem;
+}
+
+.super-admin-notice.normal .notice-header i { color: #6366f1; }
+.super-admin-notice.warning .notice-header i { color: #f59e0b; }
+.super-admin-notice.critical .notice-header i { color: #ef4444; }
+
+.super-admin-notice .notice-header strong {
+    flex: 1;
+}
+
+.super-admin-notice .notice-header .dismiss-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+}
+
+.super-admin-notice .notice-header .dismiss-btn:hover {
+    color: var(--text-primary);
+}
+
+.super-admin-notice p {
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.super-admin-notice small {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* ============================================
+   Maintenance Page
+   ============================================ */
 .maintenance-page {
     position: fixed;
     inset: 0;

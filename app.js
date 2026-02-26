@@ -16,11 +16,10 @@ const firebaseConfig = {
 };
 
 // ============================================
-// License & Control System
+// License System - Multi-Tenant Support
 // ============================================
-// This ensures the site only works when super admin allows it
-// Even if teacher deletes superadmin files, this check runs from Firebase
-const LICENSE_CHECK_ENABLED = true;
+let currentLicenseKey = null;
+let licenseBasePath = ''; // Will be set to 'superAdmin/licenses/{KEY}/data' after activation
 
 // Initialize Firebase
 function initializeFirebase() {
@@ -41,21 +40,214 @@ function initializeFirebase() {
     }
 }
 
-// Initialize default data in Firebase
+// Check and activate license
+async function checkLicense() {
+    // Check if license is already saved
+    const savedLicense = localStorage.getItem('activeLicense');
+    
+    if (savedLicense) {
+        // Verify the license is still valid
+        try {
+            const snapshot = await db.ref(`superAdmin/licenses/${savedLicense}`).once('value');
+            if (snapshot.exists()) {
+                const license = snapshot.val();
+                
+                // Check if license is suspended
+                if (license.status === 'suspended') {
+                    showMaintenancePage(
+                        license.restrictions?.maintenanceTitle || 'Access Suspended',
+                        license.restrictions?.maintenanceMessage || 'Your access has been suspended. Please contact support.'
+                    );
+                    return false;
+                }
+                
+                // Check if license is expired
+                if (license.expiry && new Date(license.expiry) < new Date()) {
+                    showMaintenancePage('License Expired', 'Your license has expired. Please contact the administrator to renew.');
+                    return false;
+                }
+                
+                // Check if site is enabled
+                if (license.restrictions?.siteEnabled === false) {
+                    showMaintenancePage(
+                        license.restrictions?.maintenanceTitle || 'Site Unavailable',
+                        license.restrictions?.maintenanceMessage || 'This site is temporarily unavailable.'
+                    );
+                    return false;
+                }
+                
+                currentLicenseKey = savedLicense;
+                licenseBasePath = `superAdmin/licenses/${savedLicense}/data`;
+                
+                // Load restrictions
+                superAdminRestrictions = license.restrictions || superAdminRestrictions;
+                
+                return true;
+            } else {
+                // License no longer exists, clear it
+                localStorage.removeItem('activeLicense');
+            }
+        } catch (error) {
+            console.error('Error verifying license:', error);
+        }
+    }
+    
+    // Show license activation screen
+    showLicenseActivation();
+    return false;
+}
+
+function showLicenseActivation() {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('studentDashboard').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.add('hidden');
+    
+    let activationPage = document.getElementById('licenseActivationPage');
+    if (!activationPage) {
+        activationPage = document.createElement('div');
+        activationPage.id = 'licenseActivationPage';
+        activationPage.className = 'license-activation-page';
+        activationPage.innerHTML = `
+            <div class="activation-container">
+                <div class="activation-header">
+                    <i class="fas fa-key"></i>
+                    <h1>License Activation</h1>
+                    <p>Enter your license code to activate this site</p>
+                </div>
+                <form id="licenseActivationForm">
+                    <div class="form-group">
+                        <label>License Code</label>
+                        <input type="text" id="licenseCodeInput" required placeholder="LIC-XXXXXXXXXXXX" style="text-transform: uppercase;">
+                    </div>
+                    <div id="licenseError" class="error-message hidden"></div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-check"></i> Activate License
+                    </button>
+                </form>
+                <p class="activation-note">
+                    <i class="fas fa-info-circle"></i>
+                    Contact your administrator if you don't have a license code.
+                </p>
+            </div>
+        `;
+        document.body.appendChild(activationPage);
+        
+        // Add styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .license-activation-page {
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+                padding: 1rem;
+            }
+            .activation-container {
+                background: var(--card-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 1rem;
+                padding: 2.5rem;
+                width: 100%;
+                max-width: 400px;
+                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            }
+            .activation-header {
+                text-align: center;
+                margin-bottom: 2rem;
+            }
+            .activation-header i {
+                font-size: 3rem;
+                color: var(--primary-color);
+                margin-bottom: 1rem;
+            }
+            .activation-header h1 {
+                font-size: 1.75rem;
+                margin-bottom: 0.5rem;
+                color: var(--text-primary);
+            }
+            .activation-header p {
+                color: var(--text-secondary);
+            }
+            .activation-note {
+                text-align: center;
+                color: var(--text-secondary);
+                font-size: 0.8rem;
+                margin-top: 1.5rem;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Add form handler
+        document.getElementById('licenseActivationForm').addEventListener('submit', activateLicense);
+    }
+    
+    activationPage.classList.remove('hidden');
+}
+
+async function activateLicense(e) {
+    e.preventDefault();
+    
+    const licenseCode = document.getElementById('licenseCodeInput').value.trim().toUpperCase();
+    const errorDiv = document.getElementById('licenseError');
+    
+    errorDiv.classList.add('hidden');
+    
+    try {
+        const snapshot = await db.ref(`superAdmin/licenses/${licenseCode}`).once('value');
+        
+        if (!snapshot.exists()) {
+            errorDiv.textContent = 'Invalid license code. Please check and try again.';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        const license = snapshot.val();
+        
+        // Check if suspended
+        if (license.status === 'suspended') {
+            errorDiv.textContent = 'This license has been suspended. Contact support.';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        // Check if expired
+        if (license.expiry && new Date(license.expiry) < new Date()) {
+            errorDiv.textContent = 'This license has expired. Contact support to renew.';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        // Save license and reload
+        localStorage.setItem('activeLicense', licenseCode);
+        location.reload();
+        
+    } catch (error) {
+        errorDiv.textContent = 'Error activating license. Please try again.';
+        errorDiv.classList.remove('hidden');
+    }
+}
+
+// Initialize default data in Firebase (under license path)
 async function initializeDefaultData() {
     try {
-        const snapshot = await db.ref('admin').once('value');
+        const basePath = licenseBasePath || '';
+        const adminPath = basePath ? `${basePath}/admin` : 'admin';
+        const brandingPath = basePath ? `${basePath}/branding` : 'branding';
+        
+        const snapshot = await db.ref(adminPath).once('value');
         if (!snapshot.exists()) {
-            await db.ref('admin').set({
+            await db.ref(adminPath).set({
                 email: 'admin@admin.com',
                 password: 'admin123'
             });
-            console.log('Default admin credentials created: admin@admin.com / admin123');
+            console.log('Default admin credentials created');
         }
 
-        const brandingSnapshot = await db.ref('branding').once('value');
+        const brandingSnapshot = await db.ref(brandingPath).once('value');
         if (!brandingSnapshot.exists()) {
-            await db.ref('branding').set({
+            await db.ref(brandingPath).set({
                 siteName: 'Media Studies A/L',
                 teacherName: '',
                 className: '',
@@ -79,11 +271,20 @@ async function initializeDefaultData() {
 }
 
 // ============================================
-// Database Operations
+// Database Operations (with license path support)
 // ============================================
+function getFullPath(path) {
+    // If license system is active, prefix with license path
+    if (licenseBasePath && !path.startsWith('superAdmin')) {
+        return `${licenseBasePath}/${path}`;
+    }
+    return path;
+}
+
 async function getData(path) {
     try {
-        const snapshot = await db.ref(path).once('value');
+        const fullPath = getFullPath(path);
+        const snapshot = await db.ref(fullPath).once('value');
         return snapshot.val();
     } catch (error) {
         console.error('Error getting data:', error);
@@ -93,7 +294,8 @@ async function getData(path) {
 
 async function setData(path, data) {
     try {
-        await db.ref(path).set(data);
+        const fullPath = getFullPath(path);
+        await db.ref(fullPath).set(data);
         return true;
     } catch (error) {
         console.error('Error setting data:', error);
@@ -103,7 +305,8 @@ async function setData(path, data) {
 
 async function pushData(path, data) {
     try {
-        const ref = await db.ref(path).push(data);
+        const fullPath = getFullPath(path);
+        const ref = await db.ref(fullPath).push(data);
         return ref.key;
     } catch (error) {
         console.error('Error pushing data:', error);
@@ -113,7 +316,8 @@ async function pushData(path, data) {
 
 async function updateData(path, data) {
     try {
-        await db.ref(path).update(data);
+        const fullPath = getFullPath(path);
+        await db.ref(fullPath).update(data);
         return true;
     } catch (error) {
         console.error('Error updating data:', error);
@@ -123,7 +327,8 @@ async function updateData(path, data) {
 
 async function deleteData(path) {
     try {
-        await db.ref(path).remove();
+        const fullPath = getFullPath(path);
+        await db.ref(fullPath).remove();
         return true;
     } catch (error) {
         console.error('Error deleting data:', error);
@@ -185,7 +390,7 @@ function updateThemeIcons() {
 }
 
 // ============================================
-// Super Admin Restrictions & License System
+// Super Admin Restrictions
 // ============================================
 let superAdminRestrictions = {
     siteEnabled: true,
@@ -193,46 +398,56 @@ let superAdminRestrictions = {
     maintenanceMessage: 'We are currently performing maintenance. Please check back later.',
     studentFeatures: { notes: true, tutes: true, videos: true },
     adminFeatures: { notes: true, tutes: true, videos: true, students: true, notices: true, branding: true },
-    noticeRestrictions: {} // Individual notice on/off control
+    noticeRestrictions: {}
 };
 
-async function checkLicenseAndRestrictions() {
+// Load super admin notices for teacher dashboard
+async function loadSuperAdminNotices() {
+    if (!currentLicenseKey) return;
+    
     try {
-        // This check ALWAYS runs - even if teacher deletes superadmin files
-        // The data is in Firebase, so teacher cannot bypass this
-        const restrictions = await getData('superAdmin/restrictions');
+        const snapshot = await db.ref(`superAdmin/licenses/${currentLicenseKey}/superAdminNotices`).once('value');
+        const notices = snapshot.val() || {};
         
-        if (restrictions) {
-            superAdminRestrictions = { ...superAdminRestrictions, ...restrictions };
+        const container = document.getElementById('superAdminNoticesContainer');
+        if (!container) return;
+        
+        const noticesList = Object.entries(notices)
+            .filter(([id, n]) => !n.read)
+            .map(([id, n]) => ({ id, ...n }));
+        
+        if (noticesList.length === 0) {
+            container.classList.add('hidden');
+            return;
         }
         
-        // Check if site is enabled
-        if (superAdminRestrictions.siteEnabled === false) {
-            showMaintenancePage(
-                superAdminRestrictions.maintenanceTitle || 'Site Unavailable',
-                superAdminRestrictions.maintenanceMessage || 'This site is currently unavailable. Please contact the administrator.'
-            );
-            return false;
-        }
-        
-        return true;
+        container.classList.remove('hidden');
+        container.innerHTML = noticesList.map(notice => `
+            <div class="super-admin-notice ${notice.priority}">
+                <div class="notice-header">
+                    <i class="fas ${notice.priority === 'critical' ? 'fa-exclamation-circle' : notice.priority === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle'}"></i>
+                    <strong>${notice.title}</strong>
+                    <button class="dismiss-btn" onclick="dismissSuperAdminNotice('${notice.id}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <p>${notice.message}</p>
+                <small>From: System Administrator</small>
+            </div>
+        `).join('');
     } catch (error) {
-        console.error('Error checking license:', error);
-        // If Firebase fails, show error (prevents bypassing by blocking Firebase)
-        return true; // Allow site if Firebase check fails (network issue)
+        console.error('Error loading super admin notices:', error);
     }
 }
 
-async function loadSuperAdminRestrictions() {
+async function dismissSuperAdminNotice(noticeId) {
+    if (!currentLicenseKey) return;
+    
     try {
-        const restrictions = await getData('superAdmin/restrictions');
-        if (restrictions) {
-            superAdminRestrictions = { ...superAdminRestrictions, ...restrictions };
-        }
-        return superAdminRestrictions;
+        await db.ref(`superAdmin/licenses/${currentLicenseKey}/superAdminNotices/${noticeId}/read`).set(true);
+        loadSuperAdminNotices();
     } catch (error) {
-        console.error('Error loading restrictions:', error);
-        return superAdminRestrictions;
+        console.error('Error dismissing notice:', error);
     }
 }
 
@@ -311,25 +526,22 @@ document.addEventListener('DOMContentLoaded', async function() {
     initTheme();
     
     try {
-        // Initialize Firebase directly (no setup screen needed)
+        // Initialize Firebase
         const firebaseReady = initializeFirebase();
         
         if (firebaseReady) {
             // Wait for Firebase to be ready
             await new Promise(resolve => setTimeout(resolve, 500));
             
-            // Ensure default data exists
-            await initializeDefaultData();
-            
-            // CRITICAL: Check license and restrictions from Firebase
-            // This check cannot be bypassed by deleting files - data is in Firebase
-            const licenseValid = await checkLicenseAndRestrictions();
+            // CRITICAL: Check license first
+            // This ensures teacher's site only works with valid license
+            const licenseValid = await checkLicense();
             if (!licenseValid) {
-                return; // Site is disabled by super admin
+                return; // License activation screen or maintenance page shown
             }
             
-            // Load full restrictions for feature control
-            await loadSuperAdminRestrictions();
+            // Ensure default data exists
+            await initializeDefaultData();
             
             // Check for existing session
             const session = getSession();
@@ -344,7 +556,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 showLoginPage();
             }
         } else {
-            // Firebase failed to initialize
             showFirebaseError();
         }
     } catch (error) {
@@ -463,6 +674,9 @@ async function showAdminDashboard() {
     document.getElementById('adminDashboard').classList.remove('hidden');
     
     await loadAdminOverview();
+    
+    // Load super admin notices for teacher
+    await loadSuperAdminNotices();
     
     // Apply feature restrictions
     applyFeatureRestrictions('admin');
