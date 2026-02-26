@@ -9,6 +9,15 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script>
+        // Fallback if Firebase takes too long
+        setTimeout(function() {
+            var loading = document.getElementById('loadingScreen');
+            if (loading && !loading.classList.contains('hidden') && typeof firebase === 'undefined') {
+                loading.innerHTML = '<div style="text-align:center;padding:2rem;"><h2>Loading Error</h2><p>Please check your internet connection and refresh.</p><button onclick="location.reload()" style="padding:10px 20px;margin-top:10px;cursor:pointer;">Refresh</button></div>';
+            }
+        }, 10000);
+    </script>
 </head>
 <body>
     <div id="app">

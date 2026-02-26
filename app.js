@@ -18,6 +18,10 @@ const firebaseConfig = {
 // Initialize Firebase
 function initializeFirebase() {
     try {
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase SDK not loaded');
+            return false;
+        }
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -179,43 +183,57 @@ function updateThemeIcons() {
 document.addEventListener('DOMContentLoaded', async function() {
     initTheme();
     
-    // Initialize Firebase directly (no setup screen needed)
-    if (initializeFirebase()) {
-        // Wait for Firebase to be ready
-        await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+        // Initialize Firebase directly (no setup screen needed)
+        const firebaseReady = initializeFirebase();
         
-        // Ensure default data exists
-        await initializeDefaultData();
-        
-        // Check for existing session
-        const session = getSession();
-        if (session) {
-            if (session.type === 'admin') {
-                showAdminDashboard();
+        if (firebaseReady) {
+            // Wait for Firebase to be ready
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Ensure default data exists
+            await initializeDefaultData();
+            
+            // Check for existing session
+            const session = getSession();
+            if (session) {
+                if (session.type === 'admin') {
+                    await showAdminDashboard();
+                } else {
+                    currentStudent = session.user;
+                    await showStudentDashboard();
+                }
             } else {
-                currentStudent = session.user;
-                showStudentDashboard();
+                showLoginPage();
             }
         } else {
-            showLoginPage();
+            // Firebase failed to initialize
+            showFirebaseError();
         }
-    } else {
-        // Firebase failed to initialize
-        document.getElementById('loadingScreen').innerHTML = `
-            <div style="text-align: center; padding: 2rem;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem;"></i>
-                <h2>Connection Error</h2>
-                <p>Failed to connect to the database. Please refresh the page.</p>
-                <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 1rem;">
-                    <i class="fas fa-refresh"></i> Refresh
-                </button>
-            </div>
-        `;
+    } catch (error) {
+        console.error('Initialization error:', error);
+        showFirebaseError();
     }
 
     // Setup event listeners
     setupEventListeners();
 });
+
+function showFirebaseError() {
+    const loadingScreen = document.getElementById('loadingScreen');
+    if (loadingScreen) {
+        loadingScreen.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--text-color);">
+                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem; display: block;"></i>
+                <h2 style="margin-bottom: 1rem;">Connection Error</h2>
+                <p style="margin-bottom: 1rem;">Failed to connect to the database. Please check your internet connection and refresh.</p>
+                <button onclick="location.reload()" class="btn btn-primary">
+                    <i class="fas fa-sync"></i> Refresh Page
+                </button>
+            </div>
+        `;
+    }
+}
 
 function setupEventListeners() {
     // Login tabs
@@ -270,7 +288,8 @@ function setupEventListeners() {
 // ============================================
 function showLoginPage() {
     document.getElementById('loadingScreen').classList.add('hidden');
-    document.getElementById('setupScreen').classList.add('hidden');
+    const setupScreen = document.getElementById('setupScreen');
+    if (setupScreen) setupScreen.classList.add('hidden');
     document.getElementById('loginPage').classList.remove('hidden');
     document.getElementById('studentDashboard').classList.add('hidden');
     document.getElementById('adminDashboard').classList.add('hidden');
@@ -408,7 +427,21 @@ async function handleLogin(e) {
 function logout() {
     clearSession();
     currentStudent = null;
-    showLoginPage();
+    
+    // Hide all screens
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('studentDashboard').classList.add('hidden');
+    document.getElementById('adminDashboard').classList.add('hidden');
+    
+    // Show login page
+    document.getElementById('loginPage').classList.remove('hidden');
+    
+    // Reset login form
+    document.getElementById('loginForm').reset();
+    document.getElementById('loginError').classList.add('hidden');
+    
+    // Load branding for login page
+    loadBrandingForLogin();
 }
 
 // ============================================

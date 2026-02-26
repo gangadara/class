@@ -119,11 +119,18 @@ a:hover {
     font-size: 4rem;
     color: var(--primary-color);
     margin-bottom: 1rem;
+    display: block;
+    animation: spin 2s linear infinite;
 }
 
 .loader p {
     color: var(--text-secondary);
     font-size: 1.1rem;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 /* ============================================
