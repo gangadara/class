@@ -602,83 +602,54 @@ async function loadStudentDashboard() {
     // Load notices
     await loadStudentNotices();
     
-    // Load about teacher section
-    await loadAboutTeacher();
+    // Load teacher info bar
+    await loadTeacherInfoBar();
 }
 
-async function loadAboutTeacher() {
+async function loadTeacherInfoBar() {
     const branding = await getData('branding');
-    const aboutSection = document.getElementById('aboutTeacherSection');
+    const infoBar = document.getElementById('teacherInfoBar');
     
-    if (!branding || (!branding.teacherName && !branding.email && !branding.phone)) {
-        aboutSection.classList.add('hidden');
+    if (!branding || (!branding.teacherName && !branding.email && !branding.phone && !branding.whatsapp)) {
+        infoBar.classList.add('hidden');
         return;
     }
     
-    aboutSection.classList.remove('hidden');
+    infoBar.classList.remove('hidden');
     
-    // Build contact items
-    let contactItems = '';
+    // Build contact icons
+    let contactIcons = '';
     
     if (branding.email) {
-        contactItems += `
-            <a href="mailto:${branding.email}" class="teacher-contact-item">
-                <i class="fas fa-envelope"></i>
-                <span>${branding.email}</span>
-            </a>
-        `;
+        contactIcons += `<a href="mailto:${branding.email}" class="email-link" title="Email"><i class="fas fa-envelope"></i></a>`;
     }
     
     if (branding.phone) {
-        contactItems += `
-            <a href="tel:${branding.phone}" class="teacher-contact-item">
-                <i class="fas fa-phone"></i>
-                <span>${branding.phone}</span>
-            </a>
-        `;
+        contactIcons += `<a href="tel:${branding.phone}" class="phone-link" title="Call"><i class="fas fa-phone"></i></a>`;
     }
     
     if (branding.whatsapp) {
-        contactItems += `
-            <a href="https://wa.me/${branding.whatsapp.replace(/[^0-9]/g, '')}" target="_blank" class="teacher-contact-item">
-                <i class="fab fa-whatsapp"></i>
-                <span>WhatsApp</span>
-            </a>
-        `;
+        contactIcons += `<a href="https://wa.me/${branding.whatsapp.replace(/[^0-9]/g, '')}" target="_blank" class="whatsapp-link" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>`;
     }
     
     if (branding.facebook) {
-        contactItems += `
-            <a href="${branding.facebook}" target="_blank" class="teacher-contact-item">
-                <i class="fab fa-facebook"></i>
-                <span>Facebook</span>
-            </a>
-        `;
+        contactIcons += `<a href="${branding.facebook}" target="_blank" class="facebook-link" title="Facebook"><i class="fab fa-facebook-f"></i></a>`;
     }
     
     if (branding.youtube) {
-        contactItems += `
-            <a href="${branding.youtube}" target="_blank" class="teacher-contact-item">
-                <i class="fab fa-youtube"></i>
-                <span>YouTube</span>
-            </a>
-        `;
+        contactIcons += `<a href="${branding.youtube}" target="_blank" class="youtube-link" title="YouTube"><i class="fab fa-youtube"></i></a>`;
     }
     
-    aboutSection.innerHTML = `
-        <h3><i class="fas fa-chalkboard-teacher"></i> About Your Teacher</h3>
-        <div class="teacher-profile">
-            ${branding.logo ? 
-                `<img src="${branding.logo}" alt="Teacher" class="teacher-avatar">` : 
-                `<div class="teacher-avatar-placeholder"><i class="fas fa-user"></i></div>`
-            }
-            <div class="teacher-info">
-                <h4>${branding.teacherName || 'Your Teacher'}</h4>
-                ${branding.className ? `<p class="class-name">${branding.className}</p>` : ''}
-                ${branding.tagline ? `<p class="tagline">"${branding.tagline}"</p>` : ''}
-                ${contactItems ? `<div class="teacher-contact-grid">${contactItems}</div>` : ''}
-            </div>
+    infoBar.innerHTML = `
+        ${branding.logo ? 
+            `<img src="${branding.logo}" alt="Teacher" class="teacher-photo">` : 
+            `<div class="teacher-photo-placeholder"><i class="fas fa-user"></i></div>`
+        }
+        <div class="teacher-details">
+            <span class="teacher-name">${branding.teacherName || branding.siteName || 'Teacher'}</span>
+            ${branding.className ? `<span class="teacher-class">${branding.className}</span>` : ''}
         </div>
+        ${contactIcons ? `<span class="divider"></span><div class="teacher-contact-icons">${contactIcons}</div>` : ''}
     `;
 }
 
@@ -717,6 +688,7 @@ async function loadStudentNotices() {
             <div class="notice-content">
                 <h4>${n.title}</h4>
                 <p>${n.message}</p>
+                ${n.link ? `<a href="${n.link}" target="_blank" class="notice-link"><i class="fas fa-external-link-alt"></i> Open Link</a>` : ''}
             </div>
         </div>
     `).join('');
@@ -893,7 +865,7 @@ function renderTutes(tutes, isPaid) {
         container.innerHTML = `
             <div class="empty-state">
                 <i class="fas fa-book"></i>
-                <p>No tutorials found</p>
+                <p>No tutes found</p>
             </div>
         `;
         return;
@@ -1143,6 +1115,7 @@ function closeVideoModal() {
 // ============================================
 let currentPdfData = null;
 let currentPdfName = null;
+let currentPdfDownloadable = false;
 
 async function viewPdf(id, type) {
     const item = await getData(`${type}/${id}`);
@@ -1153,35 +1126,58 @@ async function viewPdf(id, type) {
 
     currentPdfData = item.file;
     currentPdfName = item.title + '.pdf';
+    currentPdfDownloadable = item.downloadable === true || item.downloadable === 'true';
 
     const modal = document.getElementById('pdfModal');
-    const viewer = document.getElementById('pdfViewer');
+    const viewerContainer = document.getElementById('pdfViewerContainer');
     const title = document.getElementById('pdfModalTitle');
     const downloadBtn = document.getElementById('pdfDownloadBtn');
 
     title.textContent = item.title;
-    viewer.src = item.file;
 
-    if (item.downloadable === true || item.downloadable === 'true') {
+    // Get branding for watermark
+    const branding = await getData('branding');
+    const watermarkText = branding?.siteName || 'Media Studies A/L';
+
+    if (currentPdfDownloadable) {
+        // If downloadable, show regular PDF viewer
+        viewerContainer.innerHTML = `
+            <iframe id="pdfViewer" src="${item.file}" style="width: 100%; height: 100%; border: none;"></iframe>
+        `;
         downloadBtn.classList.remove('hidden');
     } else {
+        // If not downloadable, show protected viewer with blocked controls
+        viewerContainer.innerHTML = `
+            <div class="pdf-protected-viewer">
+                <div class="pdf-watermark">${watermarkText}</div>
+                <div class="pdf-toolbar-blocker"></div>
+                <div class="pdf-bottom-blocker"></div>
+                <iframe id="pdfViewer" src="${item.file}#toolbar=0&navpanes=0&scrollbar=1" 
+                    style="width: 100%; height: 100%; border: none;"
+                    oncontextmenu="return false;"></iframe>
+            </div>
+        `;
         downloadBtn.classList.add('hidden');
     }
 
     modal.classList.remove('hidden');
+
+    // Prevent right-click on PDF viewer
+    viewerContainer.addEventListener('contextmenu', e => e.preventDefault());
 }
 
 function closePdfModal() {
     const modal = document.getElementById('pdfModal');
-    const viewer = document.getElementById('pdfViewer');
-    viewer.src = '';
+    const viewerContainer = document.getElementById('pdfViewerContainer');
+    viewerContainer.innerHTML = '';
     currentPdfData = null;
     currentPdfName = null;
+    currentPdfDownloadable = false;
     modal.classList.add('hidden');
 }
 
 function downloadCurrentPdf() {
-    if (currentPdfData && currentPdfName) {
+    if (currentPdfData && currentPdfName && currentPdfDownloadable) {
         const link = document.createElement('a');
         link.href = currentPdfData;
         link.download = currentPdfName;
@@ -1410,6 +1406,7 @@ async function handleNoticeSubmit(e) {
         notice.title = document.getElementById('noticeFormTitle').value;
         notice.message = document.getElementById('noticeFormMessage').value;
         notice.priority = document.getElementById('noticeFormPriority').value;
+        notice.link = document.getElementById('noticeFormTextLink').value;
     } else {
         notice.image = document.getElementById('noticeFormImageData').value;
         notice.link = document.getElementById('noticeFormLink').value;
@@ -1441,6 +1438,7 @@ async function editNotice(id) {
         document.getElementById('noticeFormTitle').value = notice.title || '';
         document.getElementById('noticeFormMessage').value = notice.message || '';
         document.getElementById('noticeFormPriority').value = notice.priority || 'normal';
+        document.getElementById('noticeFormTextLink').value = notice.link || '';
     } else {
         document.getElementById('noticeFormImageData').value = notice.image || '';
         document.getElementById('noticeFormLink').value = notice.link || '';
@@ -1704,7 +1702,7 @@ async function loadAdminTutes() {
     const tbody = document.getElementById('tutesTableBody');
 
     if (Object.keys(tutes).length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">No tutorials yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">No tutes yet</td></tr>';
         return;
     }
 
@@ -1730,7 +1728,7 @@ async function loadAdminTutes() {
 }
 
 function openAddTuteModal() {
-    document.getElementById('tuteModalTitle').textContent = 'Add Tutorial';
+    document.getElementById('tuteModalTitle').textContent = 'Add Tute';
     document.getElementById('tuteForm').reset();
     document.getElementById('tuteId').value = '';
     document.getElementById('tuteFormFileData').value = '';
@@ -1754,7 +1752,7 @@ async function editTute(id) {
     const tute = await getData(`tutes/${id}`);
     if (!tute) return;
 
-    document.getElementById('tuteModalTitle').textContent = 'Edit Tutorial';
+    document.getElementById('tuteModalTitle').textContent = 'Edit Tute';
     document.getElementById('tuteId').value = id;
     document.getElementById('tuteFormTitle').value = tute.title;
     document.getElementById('tuteFormDescription').value = tute.description || '';
@@ -1811,14 +1809,14 @@ async function handleTuteSubmit(e) {
 
     closeTuteModal();
     loadAdminTutes();
-    showToast('Tutorial saved successfully!');
+    showToast('Tute saved successfully!');
 }
 
 async function deleteTute(id) {
     if (confirm('Are you sure you want to delete this tutorial?')) {
         await deleteData(`tutes/${id}`);
         loadAdminTutes();
-        showToast('Tutorial deleted');
+        showToast('Tute deleted');
     }
 }
 

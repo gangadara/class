@@ -673,6 +673,32 @@ a:hover {
 .notice-content p {
     font-size: 0.9rem;
     color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.notice-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    margin-top: 0.5rem;
+}
+
+.notice-link:hover {
+    background: rgba(0, 0, 0, 0.25);
+    text-decoration: none;
+    transform: translateX(3px);
+}
+
+.notice-link i {
+    font-size: 0.8rem;
 }
 
 /* Welcome Card */
@@ -1509,131 +1535,100 @@ a:hover {
     pointer-events: none;
 }
 
-/* About Teacher Section */
-.about-teacher-section {
-    background: var(--bg-secondary);
-    border-radius: var(--radius-lg);
-    padding: 2rem;
-    margin-bottom: 2rem;
-    border: 1px solid var(--border-color);
-}
-
-.about-teacher-section h3 {
-    font-size: 1.25rem;
-    margin-bottom: 1.5rem;
-    color: var(--text-primary);
+/* Teacher Info Bar - Simple & Clean */
+.teacher-info-bar {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-}
-
-.about-teacher-section h3 i {
-    color: var(--primary-color);
-}
-
-.teacher-profile {
-    display: flex;
-    gap: 2rem;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem 0;
+    margin: 1.5rem 0;
     flex-wrap: wrap;
-    align-items: flex-start;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
-.teacher-avatar {
-    width: 120px;
-    height: 120px;
+.teacher-info-bar .teacher-photo {
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     object-fit: cover;
-    border: 4px solid var(--primary-color);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--primary-color);
 }
 
-.teacher-avatar-placeholder {
-    width: 120px;
-    height: 120px;
+.teacher-info-bar .teacher-photo-placeholder {
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 3rem;
     color: white;
-    border: 4px solid var(--primary-color);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    flex-shrink: 0;
-}
-
-.teacher-info {
-    flex: 1;
-    min-width: 250px;
-}
-
-.teacher-info h4 {
-    font-size: 1.5rem;
-    color: var(--text-primary);
-    margin-bottom: 0.25rem;
-}
-
-.teacher-info .class-name {
-    font-size: 1rem;
-    color: var(--primary-color);
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-.teacher-info .tagline {
-    font-size: 0.95rem;
-    color: var(--text-secondary);
-    margin-bottom: 1.25rem;
-    font-style: italic;
-}
-
-.teacher-contact-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.75rem;
-}
-
-.teacher-contact-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-primary);
-    border-radius: var(--radius-md);
-    color: var(--text-primary);
-    text-decoration: none;
-    transition: all 0.3s ease;
-    border: 1px solid var(--border-color);
-    font-size: 0.9rem;
-}
-
-.teacher-contact-item:hover {
-    transform: translateY(-2px);
-    border-color: var(--primary-color);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-    text-decoration: none;
-}
-
-.teacher-contact-item i {
     font-size: 1.1rem;
-    color: var(--primary-color);
-    width: 20px;
-    text-align: center;
 }
 
-@media (max-width: 768px) {
-    .teacher-profile {
+.teacher-info-bar .teacher-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.teacher-info-bar .teacher-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.teacher-info-bar .teacher-class {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.teacher-info-bar .divider {
+    width: 1px;
+    height: 30px;
+    background: var(--border-color);
+}
+
+.teacher-contact-icons {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.teacher-contact-icons a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--bg-tertiary);
+    border-radius: 50%;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+.teacher-contact-icons a:hover {
+    transform: scale(1.1);
+    color: white;
+}
+
+.teacher-contact-icons a.email-link:hover { background: #EA4335; }
+.teacher-contact-icons a.phone-link:hover { background: #10b981; }
+.teacher-contact-icons a.whatsapp-link:hover { background: #25D366; }
+.teacher-contact-icons a.facebook-link:hover { background: #1877F2; }
+.teacher-contact-icons a.youtube-link:hover { background: #FF0000; }
+
+@media (max-width: 480px) {
+    .teacher-info-bar {
         flex-direction: column;
-        align-items: center;
-        text-align: center;
+        gap: 0.75rem;
     }
     
-    .teacher-info {
-        text-align: center;
-    }
-    
-    .teacher-contact-grid {
-        grid-template-columns: 1fr;
+    .teacher-info-bar .divider {
+        display: none;
     }
 }
 
@@ -1660,10 +1655,93 @@ a:hover {
     padding: 0;
 }
 
-.pdf-modal-body iframe {
+.pdf-viewer-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.pdf-viewer-container iframe {
     width: 100%;
     height: 100%;
     border: none;
+}
+
+/* Protected PDF Viewer Styles */
+.pdf-protected-viewer {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.pdf-protected-viewer iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    pointer-events: auto;
+}
+
+.pdf-protected-viewer .pdf-watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 3rem;
+    font-weight: 700;
+    color: rgba(0, 0, 0, 0.07);
+    pointer-events: none;
+    z-index: 10;
+    white-space: nowrap;
+    user-select: none;
+}
+
+[data-theme="dark"] .pdf-protected-viewer .pdf-watermark {
+    color: rgba(255, 255, 255, 0.05);
+}
+
+/* Block PDF toolbar (download, print buttons) */
+.pdf-protected-viewer .pdf-toolbar-blocker {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    background: var(--bg-secondary);
+    z-index: 15;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.pdf-protected-viewer .pdf-toolbar-blocker::after {
+    content: "Viewing Only - Download Disabled";
+    font-weight: 500;
+}
+
+/* Block PDF bottom bar */
+.pdf-protected-viewer .pdf-bottom-blocker {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: linear-gradient(to top, var(--bg-secondary) 60%, transparent);
+    z-index: 15;
+    pointer-events: none;
+}
+
+/* Prevent printing via CSS */
+@media print {
+    .pdf-protected-viewer,
+    .pdf-modal-content {
+        display: none !important;
+    }
 }
 
 /* ============================================

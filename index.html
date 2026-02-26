@@ -92,7 +92,7 @@
                         <i class="fas fa-file-alt"></i> Notes
                     </a>
                     <a href="#" class="nav-item" data-page="tutorials">
-                        <i class="fas fa-book"></i> Tutorials
+                        <i class="fas fa-book"></i> Tutes
                     </a>
                     <a href="#" class="nav-item" data-page="videos">
                         <i class="fas fa-video"></i> Video Classes
@@ -152,7 +152,7 @@
                                 <div class="stat-icon"><i class="fas fa-book"></i></div>
                                 <div class="stat-info">
                                     <h3 id="statTutes">0</h3>
-                                    <p>Tutorials</p>
+                                    <p>Tutes</p>
                                 </div>
                             </div>
                             <div class="stat-card">
@@ -173,7 +173,7 @@
                                 </button>
                                 <button class="action-btn" onclick="showPage('tutorials')">
                                     <i class="fas fa-book"></i>
-                                    <span>View Tutorials</span>
+                                    <span>View Tutes</span>
                                 </button>
                                 <button class="action-btn" onclick="showPage('videos')">
                                     <i class="fas fa-video"></i>
@@ -182,8 +182,8 @@
                             </div>
                         </div>
 
-                        <!-- About Teacher Section -->
-                        <div id="aboutTeacherSection" class="about-teacher-section hidden">
+                        <!-- Teacher Info Bar -->
+                        <div id="teacherInfoBar" class="teacher-info-bar hidden">
                             <!-- Will be populated by JavaScript -->
                         </div>
                     </div>
@@ -214,11 +214,11 @@
                     <!-- Tutorials Page -->
                     <div id="tutorialsPage" class="page hidden">
                         <div class="page-header">
-                            <h2><i class="fas fa-book"></i> Tutorials</h2>
+                            <h2><i class="fas fa-book"></i> Tutes</h2>
                             <div class="filters">
                                 <select id="tutesTypeFilter" onchange="filterTutes()">
                                     <option value="all">All Types</option>
-                                    <option value="new">New Tutorials</option>
+                                    <option value="new">New Tutes</option>
                                     <option value="old">Old Papers</option>
                                 </select>
                                 <select id="tutesAccessFilter" onchange="filterTutes()">
@@ -234,7 +234,7 @@
                         <div id="tutesList" class="content-grid">
                             <div class="empty-state">
                                 <i class="fas fa-book"></i>
-                                <p>No tutorials available yet</p>
+                                <p>No tutes available yet</p>
                             </div>
                         </div>
                     </div>
@@ -291,7 +291,7 @@
                         <i class="fas fa-sticky-note"></i> Notes
                     </a>
                     <a href="#" class="nav-item" data-page="admin-tutes">
-                        <i class="fas fa-book"></i> Tutorials
+                        <i class="fas fa-book"></i> Tutes
                     </a>
                     <a href="#" class="nav-item" data-page="admin-videos">
                         <i class="fas fa-video"></i> Videos
@@ -354,7 +354,7 @@
                                 <div class="stat-icon"><i class="fas fa-book"></i></div>
                                 <div class="stat-info">
                                     <h3 id="adminStatTutes">0</h3>
-                                    <p>Tutorials</p>
+                                    <p>Tutes</p>
                                 </div>
                             </div>
                             <div class="stat-card">
@@ -578,9 +578,9 @@
                     <!-- Admin Tutorials -->
                     <div id="admin-tutesPage" class="page hidden">
                         <div class="page-header">
-                            <h2><i class="fas fa-book"></i> Manage Tutorials</h2>
+                            <h2><i class="fas fa-book"></i> Manage Tutes</h2>
                             <button class="btn btn-primary" onclick="openAddTuteModal()">
-                                <i class="fas fa-plus"></i> Add Tutorial
+                                <i class="fas fa-plus"></i> Add Tute
                             </button>
                         </div>
                         <div id="adminTutesList" class="data-table-container">
@@ -708,7 +708,9 @@
                     </div>
                 </div>
                 <div class="modal-body pdf-modal-body">
-                    <iframe id="pdfViewer" src=""></iframe>
+                    <div id="pdfViewerContainer" class="pdf-viewer-container" oncontextmenu="return false;">
+                        <!-- PDF viewer will be inserted here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -822,7 +824,7 @@
         <div id="tuteModal" class="modal hidden">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3 id="tuteModalTitle">Add Tutorial</h3>
+                    <h3 id="tuteModalTitle">Add Tute</h3>
                     <button class="modal-close" onclick="closeTuteModal()">
                         <i class="fas fa-times"></i>
                     </button>
@@ -831,7 +833,7 @@
                     <form id="tuteForm">
                         <input type="hidden" id="tuteId">
                         <div class="form-group">
-                            <label>Title *</label>
+                            <label>Tute Title *</label>
                             <input type="text" id="tuteFormTitle" required>
                         </div>
                         <div class="form-group">
@@ -842,8 +844,8 @@
                             <div class="form-group">
                                 <label>Type *</label>
                                 <select id="tuteFormType" required>
-                                    <option value="new">New Tutorial</option>
-                                    <option value="old">Old Paper</option>
+                                    <option value="new">New Tute</option>
+                                <option value="old">Old Paper</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -875,7 +877,7 @@
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-outline" onclick="closeTuteModal()">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Save Tutorial</button>
+                            <button type="submit" class="btn btn-primary">Save Tute</button>
                         </div>
                     </form>
                 </div>
@@ -1004,6 +1006,11 @@
                                     <option value="important">Important</option>
                                     <option value="urgent">Urgent</option>
                                 </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Link URL (optional)</label>
+                                <input type="url" id="noticeFormTextLink" placeholder="https://whatsapp.com/group/... or any URL">
+                                <small class="text-muted">Students can click to open this link (useful for WhatsApp groups, backup links, etc.)</small>
                             </div>
                         </div>
                         <div id="bannerNoticeFields" class="hidden">
