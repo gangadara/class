@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         if (firebaseReady) {
             // Wait for Firebase to be ready
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             // Ensure default data exists
             await initializeDefaultData();
@@ -223,7 +223,7 @@ function showFirebaseError() {
     const loadingScreen = document.getElementById('loadingScreen');
     if (loadingScreen) {
         loadingScreen.innerHTML = `
-            <div style="text-align: center; padding: 2rem; color: var(--text-color);">
+            <div style="text-align: center; padding: 2rem; color: var(--text-primary);">
                 <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 1rem; display: block;"></i>
                 <h2 style="margin-bottom: 1rem;">Connection Error</h2>
                 <p style="margin-bottom: 1rem;">Failed to connect to the database. Please check your internet connection and refresh.</p>
@@ -644,9 +644,24 @@ async function loadStudentNotices() {
 }
 
 // ============================================
+// Content Loading Helper
+// ============================================
+function showContentLoading(containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = `
+        <div class="content-loading">
+            <i class="fas fa-spinner"></i>
+            <p>Loading content...</p>
+        </div>
+    `;
+}
+
+// ============================================
 // Notes
 // ============================================
 async function loadNotes() {
+    showContentLoading('notesList');
+    
     const notes = await getData('notes') || {};
     const isPaid = currentStudent && currentStudent.status === 'paid';
 
@@ -662,6 +677,8 @@ async function loadNotes() {
 function filterNotes() {
     const accessFilter = document.getElementById('notesAccessFilter').value;
     const monthFilter = document.getElementById('notesMonthFilter').value;
+    
+    showContentLoading('notesList');
     
     getData('notes').then(notes => {
         const isPaid = currentStudent && currentStudent.status === 'paid';
@@ -736,6 +753,8 @@ function renderNotes(notes, isPaid) {
 // Tutorials
 // ============================================
 async function loadTutes() {
+    showContentLoading('tutesList');
+    
     const tutes = await getData('tutes') || {};
     const isPaid = currentStudent && currentStudent.status === 'paid';
 
@@ -752,6 +771,8 @@ function filterTutes() {
     const typeFilter = document.getElementById('tutesTypeFilter').value;
     const accessFilter = document.getElementById('tutesAccessFilter').value;
     const monthFilter = document.getElementById('tutesMonthFilter').value;
+    
+    showContentLoading('tutesList');
     
     getData('tutes').then(tutes => {
         const isPaid = currentStudent && currentStudent.status === 'paid';
@@ -832,6 +853,8 @@ function renderTutes(tutes, isPaid) {
 // Videos
 // ============================================
 async function loadVideos() {
+    showContentLoading('videosList');
+    
     const videos = await getData('videos') || {};
     const isPaid = currentStudent && currentStudent.status === 'paid';
 
@@ -847,6 +870,8 @@ async function loadVideos() {
 function filterVideos() {
     const accessFilter = document.getElementById('videosAccessFilter').value;
     const monthFilter = document.getElementById('videosMonthFilter').value;
+    
+    showContentLoading('videosList');
     
     getData('videos').then(videos => {
         const isPaid = currentStudent && currentStudent.status === 'paid';
@@ -879,7 +904,7 @@ function renderVideos(videos, isPaid) {
 
     container.innerHTML = videos.map(video => {
         const locked = video.access === 'paid' && !isPaid;
-        const thumbnail = video.thumbnail || getYouTubeThumbnail(video.youtube);
+        const thumbnail = video.thumbnail || getVideoThumbnail(video);
         return `
             <div class="content-card ${locked ? 'locked' : ''}">
                 <div class="card-thumbnail" ${!locked ? `onclick="playVideo('${video.id}')"` : ''} style="cursor: ${locked ? 'not-allowed' : 'pointer'}">
@@ -897,7 +922,7 @@ function renderVideos(videos, isPaid) {
                         <span class="badge ${video.access === 'paid' ? 'badge-warning' : 'badge-success'}">
                             ${video.access === 'paid' ? 'Paid' : 'Free'}
                         </span>
-                        <span class="badge badge-info">${video.source === 'youtube' ? 'YouTube' : 'Video'}</span>
+                        <span class="badge badge-info">${getVideoSourceLabel(video)}</span>
                         ${video.month ? `<span class="badge badge-info">${formatMonth(video.month)}</span>` : ''}
                     </div>
                     <h4>${video.title}</h4>
@@ -908,10 +933,19 @@ function renderVideos(videos, isPaid) {
     }).join('');
 }
 
-function getYouTubeThumbnail(url) {
-    if (!url) return null;
-    const videoId = extractYouTubeId(url);
-    return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
+function getVideoSourceLabel(video) {
+    if (video.source === 'youtube') return 'YouTube';
+    if (video.source === 'gdrive') return 'Google Drive';
+    return 'Video';
+}
+
+function getVideoThumbnail(video) {
+    if (video.thumbnail) return video.thumbnail;
+    if (video.source === 'youtube' && video.youtube) {
+        const videoId = extractYouTubeId(video.youtube);
+        return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
+    }
+    return null;
 }
 
 function extractYouTubeId(url) {
@@ -919,6 +953,21 @@ function extractYouTubeId(url) {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
+}
+
+function extractGoogleDriveId(url) {
+    if (!url) return null;
+    // Match various Google Drive URL formats
+    const patterns = [
+        /\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /id=([a-zA-Z0-9_-]+)/,
+        /\/d\/([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+    }
+    return null;
 }
 
 async function playVideo(videoId) {
@@ -938,13 +987,30 @@ async function playVideo(videoId) {
 
     if (video.source === 'youtube' && video.youtube) {
         const videoIdYT = extractYouTubeId(video.youtube);
-        container.innerHTML = `
-            <iframe 
-                src="https://www.youtube.com/embed/${videoIdYT}?rel=0&modestbranding=1&autoplay=1" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen>
-            </iframe>
-        `;
+        if (videoIdYT) {
+            container.innerHTML = `
+                <iframe 
+                    src="https://www.youtube.com/embed/${videoIdYT}?rel=0&modestbranding=1&autoplay=1&cc_load_policy=0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen>
+                </iframe>
+            `;
+        } else {
+            container.innerHTML = '<p style="color: white; text-align: center; padding: 2rem;">Invalid YouTube URL</p>';
+        }
+    } else if (video.source === 'gdrive' && video.gdrive) {
+        const driveId = extractGoogleDriveId(video.gdrive);
+        if (driveId) {
+            container.innerHTML = `
+                <iframe 
+                    src="https://drive.google.com/file/d/${driveId}/preview" 
+                    allow="autoplay; encrypted-media" 
+                    allowfullscreen>
+                </iframe>
+            `;
+        } else {
+            container.innerHTML = '<p style="color: white; text-align: center; padding: 2rem;">Invalid Google Drive URL</p>';
+        }
     } else if (video.file) {
         const controls = video.downloadable === true || video.downloadable === 'true' ? 'controls' : 'controls controlsList="nodownload"';
         container.innerHTML = `
@@ -1079,6 +1145,76 @@ async function updateAdminCredentials() {
 
     await setData('admin', admin);
     showToast('Admin credentials updated!');
+}
+
+// ============================================
+// Backup & Restore
+// ============================================
+async function exportBackup() {
+    try {
+        const data = {
+            admin: await getData('admin'),
+            branding: await getData('branding'),
+            students: await getData('students'),
+            notes: await getData('notes'),
+            tutes: await getData('tutes'),
+            videos: await getData('videos'),
+            notices: await getData('notices'),
+            exportDate: new Date().toISOString()
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        
+        showToast('Backup exported successfully!');
+    } catch (error) {
+        console.error('Export error:', error);
+        showToast('Failed to export backup', true);
+    }
+}
+
+function importBackup() {
+    document.getElementById('backupFileInput').click();
+}
+
+async function handleBackupFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        if (!confirm('This will replace ALL existing data. Are you sure?')) {
+            return;
+        }
+        
+        // Restore all data
+        if (data.admin) await setData('admin', data.admin);
+        if (data.branding) await setData('branding', data.branding);
+        if (data.students) await setData('students', data.students);
+        if (data.notes) await setData('notes', data.notes);
+        if (data.tutes) await setData('tutes', data.tutes);
+        if (data.videos) await setData('videos', data.videos);
+        if (data.notices) await setData('notices', data.notices);
+        
+        showToast('Backup restored successfully! Refreshing...');
+        
+        setTimeout(() => {
+            location.reload();
+        }, 1500);
+    } catch (error) {
+        console.error('Import error:', error);
+        showToast('Failed to import backup. Invalid file format.', true);
+    }
+    
+    // Reset file input
+    event.target.value = '';
 }
 
 async function resetAllData() {
@@ -1589,7 +1725,7 @@ async function loadAdminVideos() {
     tbody.innerHTML = Object.entries(videos).map(([id, video]) => `
         <tr>
             <td>${video.title}</td>
-            <td><span class="badge badge-info">${video.source === 'youtube' ? 'YouTube' : 'File'}</span></td>
+            <td><span class="badge badge-info">${video.source === 'youtube' ? 'YouTube' : video.source === 'gdrive' ? 'Google Drive' : 'File'}</span></td>
             <td>${video.month ? formatMonth(video.month) : '-'}</td>
             <td><span class="badge ${video.access === 'paid' ? 'badge-warning' : 'badge-success'}">${video.access === 'paid' ? 'Paid' : 'Free'}</span></td>
             <td>${video.downloadable === true || video.downloadable === 'true' ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>'}</td>
@@ -1626,6 +1762,7 @@ function switchVideoSource(source) {
         tab.classList.toggle('active', tab.dataset.source === source);
     });
     document.getElementById('youtubeSourceInput').classList.toggle('hidden', source !== 'youtube');
+    document.getElementById('gdriveSourceInput').classList.toggle('hidden', source !== 'gdrive');
     document.getElementById('fileSourceInput').classList.toggle('hidden', source !== 'file');
 }
 
@@ -1633,7 +1770,7 @@ function handleVideoFileUpload(event) {
     const file = event.target.files[0];
     if (file) {
         if (file.size > 50 * 1024 * 1024) {
-            showToast('Video file is too large. Max 50MB for file upload. Consider using YouTube instead.', true);
+            showToast('Video file is too large. Max 50MB for file upload. Consider using YouTube or Google Drive instead.', true);
             return;
         }
         const reader = new FileReader();
@@ -1675,6 +1812,8 @@ async function editVideo(id) {
     
     if (video.source === 'youtube') {
         document.getElementById('videoFormYouTube').value = video.youtube || '';
+    } else if (video.source === 'gdrive') {
+        document.getElementById('videoFormGDrive').value = video.gdrive || '';
     } else {
         document.getElementById('videoFormFileData').value = video.file || '';
         document.getElementById('videoFileName').textContent = video.file ? 'Video uploaded' : '';
@@ -1695,10 +1834,16 @@ async function handleVideoSubmit(e) {
     const id = document.getElementById('videoId').value;
     const source = document.getElementById('videoFormSource').value;
     const youtubeUrl = document.getElementById('videoFormYouTube').value;
+    const gdriveUrl = document.getElementById('videoFormGDrive').value;
     const fileData = document.getElementById('videoFormFileData').value;
 
     if (source === 'youtube' && !youtubeUrl) {
         showToast('Please enter a YouTube URL', true);
+        return;
+    }
+
+    if (source === 'gdrive' && !gdriveUrl) {
+        showToast('Please enter a Google Drive URL', true);
         return;
     }
 
@@ -1718,7 +1863,12 @@ async function handleVideoSubmit(e) {
 
     if (source === 'youtube') {
         video.youtube = youtubeUrl;
-        video.thumbnail = getYouTubeThumbnail(youtubeUrl);
+        const ytId = extractYouTubeId(youtubeUrl);
+        if (ytId) {
+            video.thumbnail = `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`;
+        }
+    } else if (source === 'gdrive') {
+        video.gdrive = gdriveUrl;
     } else {
         if (fileData) {
             video.file = fileData;
